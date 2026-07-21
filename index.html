@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Snapshade</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0A0A0F;
+    --bg-raised: #14141C;
+    --accent: #C8FF3D;
+    --accent-dim: #8FB82B;
+    --text: #F2F2F0;
+    --text-dim: #6B6B78;
+    --danger: #FF4D4D;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Grotesk', sans-serif;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+  }
+
+  #app {
+    position: relative;
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  .screen {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 24px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+    overflow-y: auto;
+  }
+  .screen.active { opacity: 1; pointer-events: auto; }
+
+  /* ---------- MENU / LOGO ---------- */
+  .logo-wrap {
+    position: relative;
+    text-align: center;
+    margin-bottom: 8px;
+  }
+  .logo {
+    position: relative;
+    font-size: 16vw;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    line-height: 0.86;
+    text-align: center;
+    text-transform: uppercase;
+    color: var(--text);
+  }
+  .logo .line2 {
+    display: block;
+    color: var(--accent);
+    font-style: italic;
+    font-weight: 800;
+    position: relative;
+  }
+  .logo .line2::after {
+    content: '';
+    position: absolute;
+    left: 2px;
+    right: auto;
+    bottom: -0.06em;
+    width: 46%;
+    height: 0.09em;
+    background: var(--accent);
+    opacity: 0.55;
+    border-radius: 2px;
+  }
+  .logo-glow {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 260px; height: 260px;
+    transform: translate(-50%,-50%);
+    background: radial-gradient(circle, rgba(200,255,61,0.16) 0%, rgba(200,255,61,0) 70%);
+    pointer-events: none;
+    z-index: -1;
+    animation: pulseGlow 3.2s ease-in-out infinite;
+  }
+  @keyframes pulseGlow {
+    0%, 100% { opacity: 0.7; transform: translate(-50%,-50%) scale(1); }
+    50% { opacity: 1; transform: translate(-50%,-50%) scale(1.12); }
+  }
+  .tagline {
+    color: var(--text-dim);
+    font-size: 14px;
+    margin-top: 14px;
+    margin-bottom: 52px;
+    letter-spacing: 0.02em;
+  }
+  .menu-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    width: 100%;
+    max-width: 320px;
+  }
+  .btn {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 17px;
+    font-weight: 500;
+    padding: 18px 24px;
+    border-radius: 14px;
+    border: none;
+    cursor: pointer;
+    letter-spacing: 0.01em;
+    transition: transform 0.12s ease, opacity 0.12s ease;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary {
+    background: var(--accent);
+    color: #0A0A0F;
+    font-weight: 700;
+  }
+  .btn-ghost {
+    background: transparent;
+    color: var(--text);
+    border: 1.5px solid #2A2A35;
+  }
+  .icon-btn {
+    position: absolute;
+    top: 22px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--bg-raised);
+    border: 1.5px solid #23232E;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--text);
+  }
+  .icon-btn svg { display: block; }
+  .icon-btn:active { transform: scale(0.92); }
+  #btn-sound { right: 22px; }
+  .best-score {
+    position: absolute;
+    top: 24px;
+    left: 24px;
+    text-align: left;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .best-score .label {
+    font-size: 10px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .best-score .value {
+    font-size: 18px;
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  /* ---------- HOW TO ---------- */
+  .howto-title {
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 32px;
+  }
+  .howto-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    width: 100%;
+    max-width: 340px;
+    margin-bottom: 40px;
+  }
+  .howto-step {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+  }
+  .howto-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--accent);
+    border: 1.5px solid var(--accent-dim);
+    border-radius: 50%;
+    width: 26px;
+    height: 26px;
+    min-width: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+  }
+  .howto-text {
+    font-size: 14px;
+    line-height: 1.5;
+    color: #C4C4CC;
+    padding-top: 3px;
+  }
+  .howto-text b { color: var(--text); }
+
+  /* ---------- COUNTDOWN (3,2,1) ---------- */
+  .countdown-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 96px;
+    font-weight: 700;
+    color: var(--accent);
+  }
+
+  /* ---------- FLASH (show color) ---------- */
+  #flash-screen { padding: 0; }
+  .flash-swatch {
+    position: absolute;
+    inset: 0;
+  }
+  .flash-timer-bar {
+    position: absolute;
+    top: 0; left: 0;
+    height: 5px;
+    background: rgba(0,0,0,0.35);
+    width: 100%;
+    transform-origin: left;
+  }
+  .flash-label {
+    position: absolute;
+    bottom: 48px;
+    left: 0; right: 0;
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: rgba(0,0,0,0.45);
+    font-weight: 700;
+  }
+
+  /* blackout flash between show->match */
+  #blackout {
+    position: absolute;
+    inset: 0;
+    background: #000;
+    z-index: 50;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* ---------- MATCH (sliders) ---------- */
+  #match-screen {
+    justify-content: flex-start;
+    padding-top: 22px;
+    padding-bottom: 24px;
+  }
+  .match-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    max-width: 380px;
+    margin-bottom: 6px;
+  }
+  .timer-ring-wrap {
+    position: relative;
+    width: 56px;
+    height: 56px;
+  }
+  .timer-ring-wrap svg { transform: rotate(-90deg); }
+  .timer-ring-bg { fill: none; stroke: #22222E; stroke-width: 5; }
+  .timer-ring-fg { fill: none; stroke: var(--accent); stroke-width: 5; stroke-linecap: round; transition: stroke-dashoffset 0.1s linear, stroke 0.2s ease; }
+  .timer-ring-num {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 17px;
+  }
+  .round-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+  }
+
+  .target-memory-hint {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin: 8px 0 18px;
+    text-align: center;
+  }
+
+  .preview-box-lg {
+    width: 92px;
+    height: 92px;
+    border-radius: 22px;
+    border: 2px solid #23232E;
+    margin-bottom: 26px;
+    box-shadow: 0 12px 30px -10px rgba(0,0,0,0.5);
+    transition: background 0.06s linear;
+  }
+
+  .sliders-panel {
+    width: 100%;
+    max-width: 340px;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+  }
+  .slider-block label {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 9px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .slider-block label .slider-val {
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 700;
+  }
+  input[type="range"] {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 40px;
+    border-radius: 20px;
+    outline: none;
+    display: block;
+  }
+  #hueSlider {
+    background: linear-gradient(to right,
+      #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000);
+  }
+  #saturationSlider {
+    background: #444;
+  }
+  #brightnessSlider {
+    background: #444;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: white;
+    border: 4px solid var(--bg);
+    box-shadow: 0 3px 8px rgba(0,0,0,0.5);
+    cursor: pointer;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: white;
+    border: 4px solid var(--bg);
+    box-shadow: 0 3px 8px rgba(0,0,0,0.5);
+    cursor: pointer;
+  }
+
+  .lock-btn {
+    margin-top: 30px;
+    width: 100%;
+    max-width: 340px;
+    padding: 18px;
+    border-radius: 14px;
+    background: var(--accent);
+    color: #0A0A0F;
+    font-weight: 700;
+    font-size: 16px;
+    border: none;
+  }
+  .lock-btn:active { transform: scale(0.97); }
+
+  /* ---------- RESULT ---------- */
+  .result-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 6px;
+  }
+  .result-pct {
+    font-size: 72px;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 4px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .result-verdict {
+    font-size: 15px;
+    color: var(--text-dim);
+    margin-bottom: 28px;
+  }
+  .swatch-compare {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 28px;
+    width: 100%;
+    max-width: 320px;
+  }
+  .swatch-col {
+    flex: 1;
+    text-align: center;
+  }
+  .swatch-block {
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: 16px;
+    margin-bottom: 8px;
+    border: 2px solid #23232E;
+  }
+  .swatch-caption {
+    font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .result-stats {
+    display: flex;
+    gap: 10px;
+    width: 100%;
+    max-width: 320px;
+    margin-bottom: 32px;
+  }
+  .stat-box {
+    flex: 1;
+    background: var(--bg-raised);
+    border-radius: 12px;
+    padding: 14px 10px;
+    text-align: center;
+  }
+  .stat-box .stat-val {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .stat-box .stat-lbl {
+    font-size: 10px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-top: 3px;
+  }
+  .result-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+    max-width: 320px;
+  }
+
+  @media (min-width: 420px) {
+    .logo { font-size: 60px; }
+  }
+  @media (max-height: 700px) {
+    .logo-glow { width: 180px; height: 180px; }
+    .tagline { margin-bottom: 32px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- MENU -->
+  <div class="screen active" id="menu-screen">
+    <div class="best-score" id="best-score-box" style="display:none;">
+      <div class="label">Bestwert</div>
+      <div class="value" id="best-score-val">--</div>
+    </div>
+    <div class="icon-btn" id="btn-sound" title="Sound an/aus">
+      <svg id="sound-icon-on" width="18" height="18" viewBox="0 0 24 24" fill="none">
+        <path d="M3 9v6h4l5 5V4L7 9H3z" fill="currentColor"/>
+        <path d="M16 8.5c1.2 1 1.9 2.2 1.9 3.5s-.7 2.5-1.9 3.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+        <path d="M18.5 5.5c2.2 1.8 3.5 4 3.5 6.5s-1.3 4.7-3.5 6.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none" opacity="0.55"/>
+      </svg>
+      <svg id="sound-icon-off" width="18" height="18" viewBox="0 0 24 24" fill="none" style="display:none;">
+        <path d="M3 9v6h4l5 5V4L7 9H3z" fill="currentColor"/>
+        <path d="M15.5 9.5l5 5M20.5 9.5l-5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="logo-wrap">
+      <div class="logo-glow"></div>
+      <div class="logo">SNAP<span class="line2">shade</span></div>
+    </div>
+    <div class="tagline">Sieh die Farbe. Merk sie dir. Triff sie.</div>
+    <div class="menu-buttons">
+      <button class="btn btn-primary" id="btn-play">Spielen</button>
+      <button class="btn btn-ghost" id="btn-howto">Wie funktioniert's?</button>
+    </div>
+  </div>
+
+  <!-- HOW TO -->
+  <div class="screen" id="howto-screen">
+    <div class="howto-title">Ablauf</div>
+    <div class="howto-steps">
+      <div class="howto-step">
+        <div class="howto-num">1</div>
+        <div class="howto-text"><b>5 Sekunden</b> lang siehst du eine Farbe im Vollbild. Präg sie dir ein.</div>
+      </div>
+      <div class="howto-step">
+        <div class="howto-num">2</div>
+        <div class="howto-text">Die Farbe verschwindet. Du hast <b>20 Sekunden</b>, um sie mit drei Reglern nachzustellen.</div>
+      </div>
+      <div class="howto-step">
+        <div class="howto-num">3</div>
+        <div class="howto-text"><b>Farbton</b>, <b>Sättigung</b> und <b>Helligkeit</b> – drei Regler, ein Ziel.</div>
+      </div>
+      <div class="howto-step">
+        <div class="howto-num">4</div>
+        <div class="howto-text">Score = <b>Genauigkeit</b> + <b>Geschwindigkeit</b>. Schnell und genau bringt am meisten.</div>
+      </div>
+    </div>
+    <div class="menu-buttons">
+      <button class="btn btn-primary" id="btn-howto-play">Los geht's</button>
+      <button class="btn btn-ghost" id="btn-howto-back">Zurück</button>
+    </div>
+  </div>
+
+  <!-- COUNTDOWN -->
+  <div class="screen" id="countdown-screen">
+    <div class="round-label" style="margin-bottom: 18px;">MACH DICH BEREIT</div>
+    <div class="countdown-num" id="countdown-num">3</div>
+  </div>
+
+  <!-- FLASH (color shown) -->
+  <div class="screen" id="flash-screen">
+    <div class="flash-swatch" id="flash-swatch"></div>
+    <div class="flash-timer-bar" id="flash-timer-bar"></div>
+    <div class="flash-label">Präg dir das ein</div>
+  </div>
+
+  <div id="blackout"></div>
+
+  <!-- MATCH -->
+  <div class="screen" id="match-screen">
+    <div class="match-header">
+      <div class="round-label" id="round-label">RUNDE 1/5</div>
+      <div class="timer-ring-wrap">
+        <svg width="56" height="56" viewBox="0 0 56 56">
+          <circle class="timer-ring-bg" cx="28" cy="28" r="24"></circle>
+          <circle class="timer-ring-fg" id="timer-ring-fg" cx="28" cy="28" r="24" stroke-dasharray="150.8" stroke-dashoffset="0"></circle>
+        </svg>
+        <div class="timer-ring-num" id="timer-ring-num">20</div>
+      </div>
+    </div>
+
+    <div class="target-memory-hint">Stell die Farbe aus dem Gedächtnis nach</div>
+
+    <div class="preview-box-lg" id="your-preview"></div>
+
+    <div class="sliders-panel">
+      <div class="slider-block">
+        <label>Farbton <span class="slider-val" id="hue-val">0°</span></label>
+        <input type="range" id="hueSlider" min="0" max="360" value="0">
+      </div>
+      <div class="slider-block">
+        <label>Sättigung <span class="slider-val" id="sat-val">50%</span></label>
+        <input type="range" id="saturationSlider" min="0" max="100" value="50">
+      </div>
+      <div class="slider-block">
+        <label>Helligkeit <span class="slider-val" id="bright-val">55%</span></label>
+        <input type="range" id="brightnessSlider" min="10" max="90" value="55">
+      </div>
+    </div>
+
+    <button class="lock-btn" id="btn-lock">Farbe festlegen</button>
+  </div>
+
+  <!-- ROUND RESULT -->
+  <div class="screen" id="round-result-screen">
+    <div class="result-badge" id="round-badge">TREFFER</div>
+    <div class="result-pct" id="round-pct">87%</div>
+    <div class="result-verdict" id="round-verdict">Richtig gutes Auge.</div>
+    <div class="swatch-compare">
+      <div class="swatch-col">
+        <div class="swatch-block" id="swatch-target"></div>
+        <div class="swatch-caption">Ziel</div>
+      </div>
+      <div class="swatch-col">
+        <div class="swatch-block" id="swatch-yours"></div>
+        <div class="swatch-caption">Du</div>
+      </div>
+    </div>
+    <button class="btn btn-primary" id="btn-next-round" style="width:100%; max-width:320px;">Weiter</button>
+  </div>
+
+  <!-- FINAL RESULT -->
+  <div class="screen" id="final-screen">
+    <div class="result-badge">ENDERGEBNIS</div>
+    <div class="result-pct" id="final-score">432</div>
+    <div class="result-verdict" id="final-verdict">Solide Tarnung.</div>
+    <div class="result-stats">
+      <div class="stat-box">
+        <div class="stat-val" id="final-avg-acc">--%</div>
+        <div class="stat-lbl">Ø Treffer</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val" id="final-avg-time">--s</div>
+        <div class="stat-lbl">Ø Zeit</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val" id="final-best-round">--%</div>
+        <div class="stat-lbl">Bester Treffer</div>
+      </div>
+    </div>
+    <div class="result-buttons">
+      <button class="btn btn-primary" id="btn-play-again">Nochmal</button>
+      <button class="btn btn-ghost" id="btn-final-menu">Zum Menü</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  // ---------- STATE ----------
+  const TOTAL_ROUNDS = 5;
+  const FLASH_MS = 5000;
+  const MATCH_MS = 20000;
+  const STORAGE_KEY = 'snapshade_best_score';
+  const SOUND_KEY = 'snapshade_sound_on';
+
+  let state = {
+    round: 0,
+    targetHue: 0,
+    targetSat: 0,
+    targetLight: 0,
+    currentHue: 0,
+    currentSat: 50,
+    currentLight: 55,
+    roundResults: [],
+    flashTimeoutId: null,
+    matchIntervalId: null,
+    matchStartTime: 0,
+    locked: false,
+    soundOn: true
+  };
+
+  const screens = {};
+  document.querySelectorAll('.screen').forEach(el => screens[el.id] = el);
+
+  function showScreen(id){
+    Object.values(screens).forEach(s => s.classList.remove('active'));
+    screens[id].classList.add('active');
+  }
+
+  // ---------- AUDIO ENGINE (WebAudio, no external files) ----------
+  let actx = null;
+  function getCtx(){
+    if (!actx){
+      const AC = window.AudioContext || window.webkitAudioContext;
+      actx = new AC();
+    }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+
+  function playTone(freq, duration, opts){
+    if (!state.soundOn) return;
+    opts = opts || {};
+    const ctx = getCtx();
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = opts.type || 'sine';
+    osc.frequency.setValueAtTime(freq, now);
+    if (opts.slideTo){
+      osc.frequency.exponentialRampToValueAtTime(opts.slideTo, now + duration);
+    }
+    const peak = opts.volume !== undefined ? opts.volume : 0.18;
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(peak, now + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + duration + 0.02);
+  }
+
+  function playChord(freqs, duration, opts){
+    freqs.forEach(f => playTone(f, duration, opts));
+  }
+
+  const sfx = {
+    tick: () => playTone(720, 0.07, { type: 'square', volume: 0.1 }),
+    countGo: () => playTone(880, 0.22, { type: 'triangle', volume: 0.16, slideTo: 1320 }),
+    flashIn: () => playTone(200, 0.35, { type: 'sine', volume: 0.14, slideTo: 900 }),
+    sliderNudge: () => {}, // intentionally silent (would be spammy on drag)
+    lockIn: () => playTone(500, 0.12, { type: 'square', volume: 0.13, slideTo: 250 }),
+    resultGood: () => playChord([523.25, 659.25, 783.99], 0.5, { type: 'sine', volume: 0.13 }),
+    resultOk: () => playChord([392, 493.88], 0.4, { type: 'sine', volume: 0.12 }),
+    resultBad: () => playTone(180, 0.4, { type: 'sawtooth', volume: 0.1, slideTo: 90 }),
+    finalFanfare: () => {
+      playChord([392, 493.88, 587.33], 0.5, { type: 'triangle', volume: 0.12 });
+      setTimeout(() => playChord([523.25, 659.25, 783.99, 1046.5], 0.7, { type: 'triangle', volume: 0.14 }), 180);
+    },
+    tapUI: () => playTone(600, 0.06, { type: 'square', volume: 0.08 })
+  };
+
+  function soundResultFor(pct){
+    if (pct >= 75) sfx.resultGood();
+    else if (pct >= 45) sfx.resultOk();
+    else sfx.resultBad();
+  }
+
+  // sound toggle
+  const savedSound = localStorage.getItem(SOUND_KEY);
+  state.soundOn = savedSound === null ? true : savedSound === '1';
+  const soundBtn = document.getElementById('btn-sound');
+  const soundIconOn = document.getElementById('sound-icon-on');
+  const soundIconOff = document.getElementById('sound-icon-off');
+  function refreshSoundBtn(){
+    soundIconOn.style.display = state.soundOn ? 'block' : 'none';
+    soundIconOff.style.display = state.soundOn ? 'none' : 'block';
+    soundBtn.title = state.soundOn ? 'Sound aus' : 'Sound an';
+  }
+  refreshSoundBtn();
+  soundBtn.addEventListener('click', () => {
+    state.soundOn = !state.soundOn;
+    localStorage.setItem(SOUND_KEY, state.soundOn ? '1' : '0');
+    refreshSoundBtn();
+    if (state.soundOn) sfx.tapUI();
+  });
+
+  // generic UI tap sound on all buttons
+  document.querySelectorAll('.btn, .icon-btn').forEach(btn => {
+    btn.addEventListener('click', () => { if (btn.id !== 'btn-sound') sfx.tapUI(); });
+  });
+
+  // ---------- COLOR UTIL ----------
+  function hslToRgb(h, s, l){
+    s /= 100; l /= 100;
+    const k = n => (n + h / 30) % 12;
+    const a = s * Math.min(l, 1 - l);
+    const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+    return [Math.round(255 * f(0)), Math.round(255 * f(8)), Math.round(255 * f(4))];
+  }
+  function hslString(h, s, l){
+    const [r,g,b] = hslToRgb(h,s,l);
+    return `rgb(${r},${g},${b})`;
+  }
+  function colorDistance(h1, s1, l1, h2, s2, l2){
+    let dh = Math.abs(h1 - h2);
+    if (dh > 180) dh = 360 - dh;
+    const ds = Math.abs(s1 - s2);
+    const dl = Math.abs(l1 - l2);
+    const dist = Math.sqrt(Math.pow(dh / 180, 2) * 3 + Math.pow(ds / 100, 2) + Math.pow(dl / 100, 2) * 1.4);
+    const maxDist = Math.sqrt(3 + 1 + 1.4);
+    return Math.max(0, 1 - dist / maxDist);
+  }
+
+  // ---------- SLIDERS ----------
+  const hueSlider = document.getElementById('hueSlider');
+  const saturationSlider = document.getElementById('saturationSlider');
+  const brightnessSlider = document.getElementById('brightnessSlider');
+  const hueVal = document.getElementById('hue-val');
+  const satVal = document.getElementById('sat-val');
+  const brightVal = document.getElementById('bright-val');
+
+  function updateSaturationTrack(){
+    const h = state.currentHue;
+    saturationSlider.style.background = `linear-gradient(to right, ${hslString(h,0,55)}, ${hslString(h,100,55)})`;
+  }
+  function updateBrightnessTrack(){
+    const h = state.currentHue, s = state.currentSat;
+    brightnessSlider.style.background = `linear-gradient(to right, ${hslString(h,s,10)}, ${hslString(h,s,50)}, ${hslString(h,s,90)})`;
+  }
+
+  hueSlider.addEventListener('input', () => {
+    state.currentHue = parseInt(hueSlider.value, 10);
+    hueVal.textContent = state.currentHue + '°';
+    updateSaturationTrack();
+    updateBrightnessTrack();
+    updateYourPreview();
+  });
+  saturationSlider.addEventListener('input', () => {
+    state.currentSat = parseInt(saturationSlider.value, 10);
+    satVal.textContent = state.currentSat + '%';
+    updateBrightnessTrack();
+    updateYourPreview();
+  });
+  brightnessSlider.addEventListener('input', () => {
+    state.currentLight = parseInt(brightnessSlider.value, 10);
+    brightVal.textContent = state.currentLight + '%';
+    updateYourPreview();
+  });
+
+  function updateYourPreview(){
+    const c = hslString(state.currentHue, state.currentSat, state.currentLight);
+    document.getElementById('your-preview').style.background = c;
+  }
+
+  // ---------- ROUND FLOW ----------
+  function startGame(){
+    state.round = 0;
+    state.roundResults = [];
+    nextRound();
+  }
+
+  function nextRound(){
+    state.round++;
+    if (state.round > TOTAL_ROUNDS){
+      showFinalResult();
+      return;
+    }
+    document.getElementById('round-label').textContent = `RUNDE ${state.round}/${TOTAL_ROUNDS}`;
+    runCountdown();
+  }
+
+  function runCountdown(){
+    showScreen('countdown-screen');
+    let n = 3;
+    const el = document.getElementById('countdown-num');
+    el.textContent = n;
+    sfx.tick();
+    const iv = setInterval(() => {
+      n--;
+      if (n === 0){
+        clearInterval(iv);
+        sfx.countGo();
+        runFlash();
+      } else {
+        el.textContent = n;
+        sfx.tick();
+      }
+    }, 700);
+  }
+
+  function randomTargetColor(){
+    state.targetHue = Math.floor(Math.random() * 360);
+    state.targetSat = 55 + Math.floor(Math.random() * 45);
+    state.targetLight = 35 + Math.floor(Math.random() * 40);
+  }
+
+  function runFlash(){
+    randomTargetColor();
+    const swatch = document.getElementById('flash-swatch');
+    swatch.style.background = hslString(state.targetHue, state.targetSat, state.targetLight);
+    const bar = document.getElementById('flash-timer-bar');
+    bar.style.transition = 'none';
+    bar.style.width = '100%';
+    showScreen('flash-screen');
+    sfx.flashIn();
+
+    requestAnimationFrame(() => {
+      bar.style.transition = `width ${FLASH_MS}ms linear`;
+      bar.style.width = '0%';
+    });
+
+    state.flashTimeoutId = setTimeout(() => {
+      doBlackoutTransition();
+    }, FLASH_MS);
+  }
+
+  function doBlackoutTransition(){
+    const bo = document.getElementById('blackout');
+    bo.style.transition = 'opacity 0.08s ease';
+    bo.style.opacity = '1';
+    setTimeout(() => {
+      startMatchPhase();
+      setTimeout(() => {
+        bo.style.transition = 'opacity 0.35s ease';
+        bo.style.opacity = '0';
+      }, 60);
+    }, 90);
+  }
+
+  function startMatchPhase(){
+    state.locked = false;
+    state.currentHue = Math.floor(Math.random() * 360);
+    state.currentSat = 50;
+    state.currentLight = 55;
+    hueSlider.value = state.currentHue;
+    saturationSlider.value = 50;
+    brightnessSlider.value = 55;
+    hueVal.textContent = state.currentHue + '°';
+    satVal.textContent = '50%';
+    brightVal.textContent = '55%';
+    updateSaturationTrack();
+    updateBrightnessTrack();
+    updateYourPreview();
+    showScreen('match-screen');
+
+    state.matchStartTime = Date.now();
+    updateMatchTimer();
+    state.matchIntervalId = setInterval(updateMatchTimer, 100);
+  }
+
+  const ringFg = document.getElementById('timer-ring-fg');
+  const ringNum = document.getElementById('timer-ring-num');
+  const CIRC = 2 * Math.PI * 24;
+  let lastTickSecond = null;
+
+  function updateMatchTimer(){
+    const elapsed = Date.now() - state.matchStartTime;
+    const remaining = Math.max(0, MATCH_MS - elapsed);
+    const frac = remaining / MATCH_MS;
+    ringFg.style.strokeDashoffset = CIRC * (1 - frac);
+    const secLeft = Math.ceil(remaining / 1000);
+    ringNum.textContent = secLeft;
+    if (secLeft <= 5){
+      ringFg.style.stroke = 'var(--danger)';
+      ringNum.style.color = 'var(--danger)';
+      if (secLeft !== lastTickSecond && secLeft > 0){
+        sfx.tick();
+        lastTickSecond = secLeft;
+      }
+    } else {
+      ringFg.style.stroke = 'var(--accent)';
+      ringNum.style.color = 'var(--text)';
+    }
+    if (remaining <= 0){
+      lockAnswer(true);
+    }
+  }
+
+  document.getElementById('btn-lock').addEventListener('click', () => lockAnswer(false));
+
+  function lockAnswer(timedOut){
+    if (state.locked) return;
+    state.locked = true;
+    clearInterval(state.matchIntervalId);
+    lastTickSecond = null;
+    if (!timedOut) sfx.lockIn();
+    const timeUsed = Math.min(MATCH_MS, Date.now() - state.matchStartTime) / 1000;
+    const accuracy = colorDistance(
+      state.targetHue, state.targetSat, state.targetLight,
+      state.currentHue, state.currentSat, state.currentLight
+    );
+    state.roundResults.push({ accuracy, timeUsed, timedOut });
+    showRoundResult(accuracy, timeUsed, timedOut);
+  }
+
+  function verdictForAccuracy(pct){
+    if (pct >= 90) return 'Perfekte Tarnung.';
+    if (pct >= 75) return 'Richtig gutes Auge.';
+    if (pct >= 55) return 'Solide getroffen.';
+    if (pct >= 35) return 'Nah dran, aber nicht ganz.';
+    return 'Da war einiges daneben.';
+  }
+  function badgeForAccuracy(pct){
+    if (pct >= 90) return 'PERFEKT';
+    if (pct >= 75) return 'TREFFER';
+    if (pct >= 55) return 'OKAY';
+    if (pct >= 35) return 'KNAPP DANEBEN';
+    return 'VERPASST';
+  }
+
+  function showRoundResult(accuracy, timeUsed, timedOut){
+    const pct = Math.round(accuracy * 100);
+    document.getElementById('round-pct').textContent = pct + '%';
+    document.getElementById('round-verdict').textContent = timedOut
+      ? 'Zeit abgelaufen – ' + verdictForAccuracy(pct)
+      : verdictForAccuracy(pct);
+    document.getElementById('round-badge').textContent = badgeForAccuracy(pct);
+    document.getElementById('swatch-target').style.background = hslString(state.targetHue, state.targetSat, state.targetLight);
+    document.getElementById('swatch-yours').style.background = hslString(state.currentHue, state.currentSat, state.currentLight);
+    showScreen('round-result-screen');
+    soundResultFor(pct);
+  }
+
+  document.getElementById('btn-next-round').addEventListener('click', nextRound);
+
+  // ---------- SCORING ----------
+  function computeRoundScore(accuracy, timeUsed){
+    const accPoints = accuracy * 700;
+    const speedFrac = Math.max(0, (MATCH_MS/1000 - timeUsed) / (MATCH_MS/1000));
+    const speedPoints = speedFrac * 300 * accuracy;
+    return Math.round(accPoints + speedPoints);
+  }
+
+  function showFinalResult(){
+    let totalScore = 0;
+    let sumAcc = 0, sumTime = 0, bestAcc = 0;
+    state.roundResults.forEach(r => {
+      totalScore += computeRoundScore(r.accuracy, r.timeUsed);
+      sumAcc += r.accuracy;
+      sumTime += r.timeUsed;
+      bestAcc = Math.max(bestAcc, r.accuracy);
+    });
+    const avgAcc = Math.round((sumAcc / state.roundResults.length) * 100);
+    const avgTime = (sumTime / state.roundResults.length).toFixed(1);
+    const bestPct = Math.round(bestAcc * 100);
+
+    document.getElementById('final-score').textContent = totalScore;
+    document.getElementById('final-avg-acc').textContent = avgAcc + '%';
+    document.getElementById('final-avg-time').textContent = avgTime + 's';
+    document.getElementById('final-best-round').textContent = bestPct + '%';
+
+    let verdict = 'Solide Tarnung.';
+    if (avgAcc >= 88) verdict = 'Absolute Chamäleon-Klasse.';
+    else if (avgAcc >= 72) verdict = 'Richtig gutes Auge für Farben.';
+    else if (avgAcc >= 50) verdict = 'Solide Tarnung.';
+    else verdict = 'Übung macht den Meister.';
+    document.getElementById('final-verdict').textContent = verdict;
+
+    const best = parseInt(localStorage.getItem(STORAGE_KEY) || '0', 10);
+    if (totalScore > best){
+      localStorage.setItem(STORAGE_KEY, String(totalScore));
+    }
+    updateBestScoreDisplay();
+
+    showScreen('final-screen');
+    sfx.finalFanfare();
+  }
+
+  function updateBestScoreDisplay(){
+    const best = parseInt(localStorage.getItem(STORAGE_KEY) || '0', 10);
+    const box = document.getElementById('best-score-box');
+    if (best > 0){
+      box.style.display = 'block';
+      document.getElementById('best-score-val').textContent = best;
+    }
+  }
+
+  // ---------- NAV ----------
+  document.getElementById('btn-play').addEventListener('click', startGame);
+  document.getElementById('btn-howto').addEventListener('click', () => showScreen('howto-screen'));
+  document.getElementById('btn-howto-back').addEventListener('click', () => showScreen('menu-screen'));
+  document.getElementById('btn-howto-play').addEventListener('click', startGame);
+  document.getElementById('btn-play-again').addEventListener('click', startGame);
+  document.getElementById('btn-final-menu').addEventListener('click', () => showScreen('menu-screen'));
+
+  updateBestScoreDisplay();
+  updateSaturationTrack();
+  updateBrightnessTrack();
+})();
+</script>
+
+</body>
+</html>
