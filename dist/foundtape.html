@@ -4677,6 +4677,7 @@ function updateLights(dt, t, danger){
       if(Math.random() < 0.0035) v = 0.28;
     }
     if(danger > 0 && Math.random() < 0.25*danger) v *= 0.12;
+    if(SCARE.blitz > 0) v = Math.min(2.4, v + 1.6);        // eine Röhre platzt
     f.on = v;
     f.mesh.material.color.copy(TUBECOL).multiplyScalar(v);
   }
@@ -5131,6 +5132,85 @@ function updateMonster(dt, player, noiseRadius){
   return distP;
 }
 
+/* ---------- Eine Gestalt am Gangende, die verschwindet ---------- */
+const glimpse = new THREE.Mesh(new THREE.PlaneGeometry(0.74, 1.98), MAT.dark);
+glimpse.visible = false;
+glimpse.position.y = 0.99;
+scene.add(glimpse);
+
+const SCARE = { t: 22 + Math.random()*18, glimpseT: 0, blitz: 0 };
+
+/* Sucht einen Platz im Blickfeld, auf den freie Sicht besteht. */
+function platzImBlick(minD, maxD){
+  for(let v=0; v<26; v++){
+    const ab = (Math.random()-0.5) * 0.9;                  // bis ±26° zur Blickachse
+    const d  = minD + Math.random()*(maxD-minD);
+    const y  = S.yaw + ab;
+    const x  = S.pos.x - Math.sin(y)*d, z = S.pos.z - Math.cos(y)*d;
+    if(!freeP(x, z)) continue;
+    if(!losClear(S.pos.x, S.pos.z, x, z)) continue;
+    return { x, z, d };
+  }
+  return null;
+}
+
+/* Regie für die kleinen Schrecken zwischendurch. Sie greift nur, wenn die
+   Gestalt gerade nicht ohnehin hinter einem her ist. */
+function scareTick(dt){
+  // Die Gestalt am Gangende wieder einsammeln
+  if(glimpse.visible){
+    SCARE.glimpseT -= dt;
+    glimpse.lookAt(camera.position.x, 0.99, camera.position.z);
+    const nah = camera.position.distanceTo(glimpse.position) < 7;
+    if(SCARE.glimpseT <= 0 || nah){
+      glimpse.visible = false;
+      if(nah) burst(0.20, 900, 0.10, 'highpass');          // ein Rascheln, dann weg
+    }
+  }
+  if(SCARE.blitz > 0) SCARE.blitz -= dt;
+
+  if(MON.state === 'hunt') return;
+  SCARE.t -= dt;
+  if(SCARE.t > 0) return;
+  SCARE.t = 28 + Math.random()*34;
+
+  const wahl = Math.random();
+  if(wahl < 0.45){
+    // Jemand steht am Ende des Ganges
+    const p = platzImBlick(11, 24);
+    if(p){
+      glimpse.position.set(p.x, 0.99, p.z);
+      glimpse.visible = true;
+      SCARE.glimpseT = 1.1 + Math.random()*1.3;
+      burst(0.5, 220, 0.10);
+      S.glitch = Math.max(S.glitch, 0.55);
+    }
+  } else if(wahl < 0.78){
+    // Eine Röhre platzt
+    let f = null, best = 1e9;
+    for(const k of fixtures){
+      if(k.dead) continue;
+      const d = k.pos.distanceTo(camera.position);
+      if(d < 3 || d > 16) continue;
+      if(!losClear(S.pos.x, S.pos.z, k.pos.x, k.pos.z)) continue;
+      if(d < best){ best = d; f = k; }
+    }
+    if(f){
+      f.dead = true;
+      SCARE.blitz = 0.12;
+      burst(0.10, 5200, 0.34, 'highpass');                 // Knall
+      setTimeout(() => burst(0.7, 300, 0.16), 90);          // Nachhall
+      S.glitch = Math.max(S.glitch, 0.8);
+      if(navigator.vibrate) navigator.vibrate(45);
+    }
+  } else {
+    // Irgendwo fällt etwas um
+    burst(0.7, 170, 0.30);
+    setTimeout(() => burst(0.35, 120, 0.18), 260);
+    S.glitch = Math.max(S.glitch, 0.45);
+  }
+}
+
 /* ============ 8  Bild: Fischauge, Bandfehler, Nachtsicht ============ */
 
 let RT_W = 640, RT_H = 360;
@@ -5399,7 +5479,7 @@ function sndScream(){
 /* ---------- Hintergrundmusik ---------- */
 const MUSIC = {
   list: [], idx: 0, el: null, vol: 0, gap: 0, base: 0.40,
-  gain: null, quelle: null,
+  gain: null, quelle: null, alle: [],
   on: localStorage.getItem('ft_music') !== '0'
 };
 fetch(A('assets/music/tracks.json'))
@@ -5413,10 +5493,16 @@ fetch(A('assets/music/tracks.json'))
   })
   .catch(() => {});
 
-function musikAn(){ MUSIC.gap = 0; musicNext(); }
+function musikAn(){
+  if(MUSIC.el) return;             // läuft schon, kein zweites Stück obendrauf
+  MUSIC.gap = 0;
+  musicNext();
+}
 
 function musicNext(){
   if(!MUSIC.list.length || !MUSIC.on) return;
+  // Erst aufräumen: sonst läuft ein vergessenes Stück unhörbar weiter mit
+  if(MUSIC.el){ try { MUSIC.el.pause(); } catch(e){} }
   const t = MUSIC.list[MUSIC.idx % MUSIC.list.length];
   MUSIC.idx++;
   const a = new Audio(A('assets/music/' + t.file));
@@ -5446,6 +5532,8 @@ function musicNext(){
   const pr = a.play();
   if(pr && pr.catch) pr.catch(() => done(20));
   MUSIC.el = a;
+  MUSIC.alle.push(a);
+  if(MUSIC.alle.length > 8) MUSIC.alle.splice(0, MUSIC.alle.length - 8);
   MUSIC.vol = 0;
   setzeLautstaerke(0);
 }
@@ -5478,6 +5566,20 @@ function musicUpdate(dt, danger, ausblenden){
     MUSIC.el = null; MUSIC.quelle = null;
     MUSIC.gap = 1.2;
   }
+}
+
+/* Hart anhalten: kein Ausblenden abwarten, das Stück steht sofort. */
+function musikStopp(){
+  // Alles anhalten, was je gestartet wurde - nicht nur das zuletzt gestartete
+  for(const a of MUSIC.alle){
+    try { a.pause(); a.currentTime = 0; } catch(e){}
+  }
+  MUSIC.alle.length = 0;
+  MUSIC.el = null;
+  MUSIC.quelle = null;
+  MUSIC.vol = 0;
+  setzeLautstaerke(0);
+  MUSIC.gap = 1.2;
 }
 
 function setMusic(on){
@@ -5562,9 +5664,26 @@ function holdBtn(el, on, off){
     el.addEventListener(t, () => { if(el.classList.contains('held')){ el.classList.remove('held'); off(); } }));
 }
 holdBtn(bRun, ()=>IN.run=true, ()=>IN.run=false);
-bNv.addEventListener('click', e => { e.preventDefault(); toggleNv(); });
-bUse.addEventListener('click', e => { e.preventDefault(); IN.use = true; });
-bMenu.addEventListener('click', e => { e.preventDefault(); pauseGame(); });
+
+/* Ein Knopf muss auch dann gehen, wenn schon ein Finger auf dem Stick liegt.
+   Android schickt bei einer zweiten Berührung kein click mehr - deshalb hängt
+   die Auslösung an pointerdown; click bleibt für Maus und Tastatur daneben. */
+function tapBtn(el, fn){
+  let zuletzt = 0;
+  const ausloesen = e => {
+    const jetzt = performance.now();
+    if(jetzt - zuletzt < 350) return;      // nicht doppelt zählen
+    zuletzt = jetzt;
+    if(e.cancelable) e.preventDefault();
+    e.stopPropagation();
+    fn();
+  };
+  el.addEventListener('pointerdown', ausloesen);
+  el.addEventListener('click', ausloesen);
+}
+tapBtn(bNv,   () => toggleNv());
+tapBtn(bUse,  () => { IN.use = true; });
+tapBtn(bMenu, () => pauseGame());
 
 addEventListener('keydown', e => {
   KEY[e.code] = true;
@@ -5788,6 +5907,7 @@ function startGame(){
   goFullscreen();
   for(const m of MENUS) if(m) m.classList.add('hidden');
   elHud.classList.remove('hidden');
+  musikStopp();                      // im Spiel läuft keine Musik
   S.phase = 'play';
   clock.getDelta();
   toast('BAND LÄUFT', 2.0);
@@ -5821,11 +5941,42 @@ function endScreen(title, text){
   bUse.classList.remove('on');
   if(document.pointerLockElement) document.exitPointerLock();
 }
+/* Der Schrei im Moment des Zugriffs: mehrere Lagen übereinander, laut. */
+function jumpscareTon(){
+  const ac = SND.ctx;
+  if(!ac || !SND.on) return;
+  burst(0.06, 9000, 0.55, 'highpass');                     // harter Anschlag
+  burst(1.1, 700, 0.34);                                   // Rauschwand
+  const kreisch = ac.createOscillator(); kreisch.type = 'sawtooth';
+  kreisch.frequency.setValueAtTime(1750, ac.currentTime);
+  kreisch.frequency.exponentialRampToValueAtTime(220, ac.currentTime + 0.7);
+  const g1 = ac.createGain(); g1.gain.value = 0;
+  g1.gain.setTargetAtTime(0.30, ac.currentTime, 0.004);
+  g1.gain.setTargetAtTime(0.0, ac.currentTime + 0.35, 0.18);
+  const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 900; bp.Q.value = 0.8;
+  kreisch.connect(bp); bp.connect(g1); g1.connect(SND.master);
+  kreisch.start(); kreisch.stop(ac.currentTime + 1.4);
+
+  const tief = ac.createOscillator(); tief.type = 'square';
+  tief.frequency.setValueAtTime(90, ac.currentTime);
+  tief.frequency.exponentialRampToValueAtTime(28, ac.currentTime + 1.0);
+  const g2 = ac.createGain(); g2.gain.value = 0;
+  g2.gain.setTargetAtTime(0.34, ac.currentTime, 0.01);
+  g2.gain.setTargetAtTime(0.0, ac.currentTime + 0.6, 0.3);
+  tief.connect(g2); g2.connect(SND.master);
+  tief.start(); tief.stop(ac.currentTime + 1.8);
+}
+
 function die(){
   if(S.phase !== 'play') return;
-  S.phase = 'dead'; S.endT = 0; S.yawT = S.yaw; S.pitchT = S.pitch;
-  sndScream();
-  if(navigator.vibrate) navigator.vibrate([120,60,240]);
+  S.phase = 'dead'; S.endT = 0;
+  // Der Blick springt sofort auf sie - kein Nachziehen, kein Suchen
+  const dx = MON.pos.x - S.pos.x, dz = MON.pos.z - S.pos.z;
+  S.yaw = S.yawT = Math.atan2(-dx, -dz);
+  S.pitch = S.pitchT = 0.12;
+  musikStopp();
+  jumpscareTon();
+  if(navigator.vibrate) navigator.vibrate([0,90,40,180,60,320]);
   if(SND.ctx && SND.on){
     SND.hiss.gain.setTargetAtTime(0.34, SND.ctx.currentTime, 0.05);
     SND.hiss.gain.setTargetAtTime(0.0,  SND.ctx.currentTime+1.6, 0.4);
@@ -5926,6 +6077,8 @@ function step(dt){
   const signal = checkItems(dt);
   checkDoor();
 
+  scareTick(dt);
+
   // Die Gestalt
   let distP = updateMonster(dt, S.pos, noise);
   if(!isFinite(distP)) distP = 999;
@@ -5988,30 +6141,39 @@ function step(dt){
 
 function deathStep(dt){
   S.endT += dt;
-  // Die Kamera dreht sich zu dem, was sie erwischt hat
-  const dx = MON.pos.x - S.pos.x, dz = MON.pos.z - S.pos.z;
-  // Blickrichtung zur Gestalt: für die Kamera gilt atan2(-dx,-dz).
-  // Mit dem früheren +PI drehte sie sich im Moment des Todes von ihr weg.
-  const want = Math.atan2(-dx, -dz);
-  let d = want - S.yaw;
-  while(d >  Math.PI) d -= Math.PI*2;
-  while(d < -Math.PI) d += Math.PI*2;
-  S.yaw += d * Math.min(dt*7, 1);
-  S.pitch += (0.16 - S.pitch) * Math.min(dt*4, 1);
-  camera.position.set(S.pos.x, CFG.eye - Math.min(S.endT*0.5, 0.5) + Math.sin(S.endT*33)*0.05, S.pos.z);
-  camera.rotation.set(S.pitch, S.yaw, Math.sin(S.endT*11)*0.06);
-  camera.updateProjectionMatrix();
+  const t = S.endT;
+
+  /* Sie steht im nächsten Bild vor der Linse: der Kopf wandert auf Augenhöhe,
+     das Bild schlägt auf, dann reißt das Band. */
+  const rein = Math.min(t/0.11, 1);
+  const d = lerp(2.2, 0.92, rein);
+  const gx = S.pos.x - Math.sin(S.yaw)*d, gz = S.pos.z - Math.cos(S.yaw)*d;
   MON.group.visible = true;
-  MON.group.position.set(lerp(MON.group.position.x, S.pos.x, Math.min(dt*2,1)), 0,
-                         lerp(MON.group.position.z, S.pos.z, Math.min(dt*2,1)));
+  MON.group.position.set(gx, lerp(0, -0.66, rein), gz);          // Kopf auf Augenhöhe
+  MON.group.rotation.y = Math.atan2(S.pos.x - gx, S.pos.z - gz);  // schaut in die Kamera
+
+  const schuett = Math.max(0, 1 - t/0.9);
+  camera.position.set(
+    S.pos.x + (Math.random()-0.5)*0.10*schuett,
+    CFG.eye - Math.min(t*0.35, 0.30) + (Math.random()-0.5)*0.12*schuett,
+    S.pos.z + (Math.random()-0.5)*0.10*schuett);
+  camera.rotation.set(S.pitch + (Math.random()-0.5)*0.10*schuett,
+                      S.yaw + (Math.random()-0.5)*0.10*schuett,
+                      (Math.random()-0.5)*0.22*schuett);
+  camera.fov = lerp(74, 101, rein) - Math.max(0, t-0.3)*9;
+  camera.fov = clamp(camera.fov, 62, 101);
+  camera.updateProjectionMatrix();
+
   updateLights(dt, S.t, 1);
   S.glitch = 1;
-  postMat.uniforms.uStatic.value = S.endT > 0.35 ? Math.min((S.endT-0.35)*3, 1) : 0;
-  if(S.endT > 1.5) postMat.uniforms.uFade.value = Math.max(0, 1-(S.endT-1.5)*1.6);
-  if(S.endT > 2.4 && scEnd.classList.contains('hidden')){
+  postMat.uniforms.uRed.value = Math.max(0, 0.55 - t*0.5);
+  postMat.uniforms.uStatic.value = t < 0.10 ? 1 : (t > 0.55 ? Math.min((t-0.55)*4, 1) : 0);
+  if(t > 1.5) postMat.uniforms.uFade.value = Math.max(0, 1-(t-1.5)*1.6);
+  if(t > 2.4 && scEnd.classList.contains('hidden')){
     endScreen('END OF TAPE', 'Das Band bricht an dieser Stelle ab.<br>Was danach kommt, hat niemand gesehen.');
   }
 }
+
 function winStep(dt){
   S.endT += dt;
   S.glitch = Math.min(1, S.endT*0.8);

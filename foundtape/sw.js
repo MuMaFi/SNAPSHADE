@@ -1,5 +1,5 @@
 /* Found Tape — Offline-Cache. Alles liegt lokal, das Spiel läuft ohne Netz. */
-const CACHE = 'foundtape-v2';
+const CACHE = 'foundtape-v3';
 const FILES = [
   './', './index.html', './game.js', './manifest.webmanifest',
   './lib/three.min.js', './lib/GLTFLoader.js',
@@ -19,14 +19,31 @@ self.addEventListener('activate', e => {
 });
 self.addEventListener('fetch', e => {
   if(e.request.method !== 'GET') return;
+  const url = new URL(e.request.url);
+  // Spielcode und Seite immer zuerst aus dem Netz holen: sonst spielt man nach
+  // einer Aktualisierung weiter die alte Fassung aus dem Zwischenspeicher.
+  const istCode = /\.(html|js|json|webmanifest)$/.test(url.pathname) || url.pathname.endsWith('/');
+  if(istCode){
+    e.respondWith(
+      fetch(e.request).then(res => {
+        if(res.status === 200 && res.type === 'basic'){
+          const copy = res.clone();
+          caches.open(CACHE).then(c => c.put(e.request, copy)).catch(()=>{});
+        }
+        return res;
+      }).catch(() => caches.match(e.request, { ignoreSearch:true })
+                        .then(hit => hit || caches.match('./index.html')))
+    );
+    return;
+  }
+  // Texturen, Modell und Musik ändern sich kaum: erst der Zwischenspeicher
   e.respondWith(
     caches.match(e.request, { ignoreSearch:true }).then(hit => hit || fetch(e.request).then(res => {
-      // 206-Teilantworten (Audio-Streaming) gehören nicht in den Cache
       if(res.status === 200 && res.type === 'basic'){
         const copy = res.clone();
         caches.open(CACHE).then(c => c.put(e.request, copy)).catch(()=>{});
       }
       return res;
-    }).catch(() => caches.match('./index.html')))
+    }))
   );
 });
