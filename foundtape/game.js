@@ -46,18 +46,18 @@ const CFG = {
   monWalk:    1.45,   // streift umher
   monHunt:    3.35,   // jagt (langsamer als Sprint, schneller als Gehen)
   monCatch:   1.15,
-  monSight:   23,
-  monCone:    Math.cos(1.15),   // ~132° Sichtfeld
+  monSight:   26,
+  monCone:    Math.cos(1.28),   // ~147° Sichtfeld
 
   drainIdle:  0.030,  // Akku %/s
   drainNv:    0.62,
   batteryGain: 26,
 
-  exposure:   0.88,
-  lightPower: 6.5,
-  fog:        0.030,
+  exposure:   1.02,
+  lightPower: 7.6,
+  fog:        0.038,
   vhs:        0.42,
-  yellow:     PARAMS.has('yellow') ? +PARAMS.get('yellow') : 0.72,   // Gelbstich, 0 = aus, 1 = voll
+  yellow:     PARAMS.has('yellow') ? +PARAMS.get('yellow') : 1.0,   // Gelbstich, 0 = aus, 1 = voll
   lens:       0.34
 };
 
@@ -80,13 +80,13 @@ const canvas = $('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias:false, powerPreference:'high-performance' });
 renderer.setPixelRatio(1);
 renderer.outputEncoding = THREE.sRGBEncoding;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMapping = THREE.LinearToneMapping;
 renderer.toneMappingExposure = CFG.exposure;
 renderer.shadowMap.enabled = quality.shadows;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
-const FOGCOL = 0x181307;
+const FOGCOL = 0x0a0803;      // Tiefe läuft ins Schwarz, nicht in gelben Dunst
 scene.fog = new THREE.FogExp2(FOGCOL, CFG.fog);
 scene.background = new THREE.Color(FOGCOL);
 
@@ -420,8 +420,64 @@ function buildOcc(clear){
   for(const s of SOLIDS)  mark(s[0], s[1], s[2]+clear, s[3]+clear);
   return occ;
 }
+/* Für den Spieler wird gegen die echten Klötze geprüft. Das Raster hat
+   Stufen von einer halben Zelle — an einer Wand entlang zu rennen hat
+   sich dadurch angefühlt, als hake man alle paar Schritte ein. */
+const BOXES = [];
+const BGRID = [];
+function buildBoxes(){
+  BOXES.length = 0;
+  for(let y=0;y<G;y++) for(let x=0;x<=G;x++)
+    if(wallV[vi(x,y)]) BOXES.push({x:x*CS, z:y*CS+CS/2, hx:0.12, hz:CS/2});
+  for(let y=0;y<=G;y++) for(let x=0;x<G;x++)
+    if(wallHz[hi(x,y)]) BOXES.push({x:x*CS+CS/2, z:y*CS, hx:CS/2, hz:0.12});
+  for(const p of PILLARS) BOXES.push({x:p[0]*CS+CS/2, z:p[1]*CS+CS/2, hx:0.78, hz:0.78});
+  for(const s of SOLIDS)  BOXES.push({x:s[0], z:s[1], hx:s[2], hz:s[3]});
+
+  BGRID.length = 0;
+  for(let i=0;i<G*G;i++) BGRID.push(null);
+  for(const b of BOXES){
+    const x0=Math.max(0,Math.floor((b.x-b.hx-1)/CS)), x1=Math.min(G-1,Math.floor((b.x+b.hx+1)/CS));
+    const z0=Math.max(0,Math.floor((b.z-b.hz-1)/CS)), z1=Math.min(G-1,Math.floor((b.z+b.hz+1)/CS));
+    for(let z=z0;z<=z1;z++) for(let x=x0;x<=x1;x++){
+      const i = idx(x,z);
+      (BGRID[i] || (BGRID[i] = [])).push(b);
+    }
+  }
+}
+/* Schiebt einen Kreis aus allen Klötzen heraus, die er berührt. */
+const _near = [];
+function resolveCircle(px, pz, r){
+  _near.length = 0;
+  const cx0 = clamp(Math.floor(px/CS), 0, G-1), cz0 = clamp(Math.floor(pz/CS), 0, G-1);
+  for(let z=cz0-1; z<=cz0+1; z++) for(let x=cx0-1; x<=cx0+1; x++){
+    if(x<0||z<0||x>=G||z>=G) continue;
+    const l = BGRID[idx(x,z)];
+    if(l) for(const b of l) if(_near.indexOf(b) < 0) _near.push(b);
+  }
+  for(let pass=0; pass<2; pass++){
+    for(const b of _near){
+      const dx = px-b.x, dz = pz-b.z;
+      const nx = clamp(dx, -b.hx, b.hx), nz = clamp(dz, -b.hz, b.hz);
+      const ox = dx-nx, oz = dz-nz;
+      const d2 = ox*ox + oz*oz;
+      if(d2 >= r*r) continue;
+      if(d2 > 1e-9){
+        const d = Math.sqrt(d2);
+        px += ox/d*(r-d); pz += oz/d*(r-d);
+      } else {                        // Mittelpunkt im Klotz: kürzesten Weg raus
+        const ax = b.hx + r - Math.abs(dx), az = b.hz + r - Math.abs(dz);
+        if(ax < az) px += (dx < 0 ? -ax : ax);
+        else        pz += (dz < 0 ? -az : az);
+      }
+    }
+  }
+  return [px, pz];
+}
+
 let OCC_RAW, OCC_P, OCC_M;
 function rebuildOcc(){
+  buildBoxes();
   OCC_RAW = buildOcc(0.02);        // Sichtlinien
   OCC_P   = buildOcc(CFG.radius);  // Spieler
   OCC_M   = buildOcc(0.55);        // Gestalt
@@ -528,15 +584,15 @@ for(let i=0;i<Math.round(G*G/26);i++){
 /* ---------- Licht ---------- */
 const rig = [];
 for(let i=0;i<quality.lights;i++){
-  const pl = new THREE.PointLight(0xffe9c4, 0, 13, 2);
+  const pl = new THREE.PointLight(0xffd894, 0, 14, 2);
   if(quality.shadows && i<1){
     pl.castShadow=true; pl.shadow.mapSize.set(512,512);
     pl.shadow.bias=-0.005; pl.shadow.camera.near=0.4; pl.shadow.camera.far=13;
   }
   scene.add(pl); rig.push(pl);
 }
-scene.add(new THREE.HemisphereLight(0xffeec8, 0x53471d, 0.13));
-scene.add(new THREE.AmbientLight(0x14110a, 1.0));
+scene.add(new THREE.HemisphereLight(0xffe0a4, 0x2a2109, 0.07));
+scene.add(new THREE.AmbientLight(0x0b0906, 1.0));
 
 // Nachtsicht-Aufheller am Camcorder
 const nvLight = new THREE.PointLight(0xcfe4ff, 0, 15, 1.8);
@@ -568,7 +624,7 @@ function updateLights(dt, t, danger){
     if(!f){ pl.intensity = 0; continue; }
     pl.position.copy(f.pos);
     pl.intensity = CFG.lightPower * f.on;
-    pl.color.setHex(danger > 0.5 ? 0xff7a48 : 0xffe9c4);
+    pl.color.setHex(danger > 0.5 ? 0xff6a34 : 0xffd894);
   }
 }
 
@@ -818,6 +874,8 @@ const MON = {
   seenT: -99,
   searchT: 0,
   stuck: 0,
+  dirT: 12,
+  sndT: 2,
   height: 2.55
 };
 MON.group.visible = false;
@@ -883,6 +941,15 @@ function monUnstick(){
   }
 }
 
+/* Etwas hat die Gestalt aufmerksam gemacht — sie geht der Stelle nach. */
+function monAlert(x, z, lange){
+  MON.lastSeen.set(x, 0, z);
+  if(MON.state === 'hunt') return;
+  MON.state = 'search';
+  MON.searchT = Math.max(MON.searchT, lange ? 16 : 11);
+  MON.repath = 0;
+}
+
 function updateMonster(dt, player, noiseRadius){
   monUnstick();
   const toP = _mv.set(player.x - MON.pos.x, 0, player.z - MON.pos.z);
@@ -905,6 +972,38 @@ function updateMonster(dt, player, noiseRadius){
     else if(MON.state === 'search'){ MON.searchT = Math.max(MON.searchT, 10); MON.repath = Math.min(MON.repath, 0.2); }
   }
 
+  /* Regie: die Gestalt darf nicht ewig am anderen Ende der Etage kreisen.
+     Zieht sie zu lange ihre Bahnen, wandert sie in die Gegend des Spielers —
+     nah genug für eine Begegnung, ohne dass sie direkt auf ihn zuläuft. */
+  MON.dirT -= dt;
+  if(MON.dirT <= 0){
+    MON.dirT = 12 + Math.random()*8;
+    if(MON.state === 'roam' && distP > 26){
+      const pc = cellOf(player.x, player.z), px = pc%G, py = (pc/G)|0;
+      for(let t=0;t<40;t++){
+        const cx = clamp(px + (Math.random()*15|0) - 7, 0, G-1);
+        const cy = clamp(py + (Math.random()*15|0) - 7, 0, G-1);
+        const c = idx(cx,cy);
+        if(blocked[c] || REACH[c] < 0) continue;
+        const ring = Math.abs(cx-px) + Math.abs(cy-py);
+        if(ring < 3 || ring > 8) continue;      // in die Gegend, nicht auf den Schoß
+        monSetPath(c);
+        break;
+      }
+    }
+  }
+
+  // Schwere Schritte, sobald sie in Hörweite ist — das kündigt sie an
+  MON.sndT -= dt;
+  if(MON.sndT <= 0){
+    const hear = MON.state === 'hunt' ? 26 : 17;
+    if(distP < hear){
+      const nah = 1 - distP/hear;
+      MON.sndT = MON.state === 'hunt' ? 0.42 : 0.9 + Math.random()*0.5;
+      burst(0.16, 120 + nah*90, 0.05 + nah*0.20);
+    } else MON.sndT = 1.5;
+  }
+
   MON.repath -= dt;
   if(MON.state === 'hunt'){
     if(MON.seenT > 6.5){ MON.state='search'; MON.searchT=12; MON.repath=0; }
@@ -923,7 +1022,8 @@ function updateMonster(dt, player, noiseRadius){
   }
 
   // Bewegung entlang des Weges
-  const speed = MON.state==='hunt' ? CFG.monHunt : (MON.state==='search' ? CFG.monWalk*1.5 : CFG.monWalk);
+  const hunted = CFG.monHunt + (S.tapes || 0)*0.075;    // mit jedem Band wird sie zäher
+  const speed = MON.state==='hunt' ? hunted : (MON.state==='search' ? CFG.monWalk*1.6 : CFG.monWalk*1.15);
   let tx, tz;
   if(MON.state === 'hunt' && distP < 7 && losClear(MON.pos.x, MON.pos.z, player.x, player.z)){
     tx = player.x; tz = player.z;                       // in Sichtweite direkt drauf zu
@@ -1026,13 +1126,19 @@ const postMat = new THREE.ShaderMaterial({
     '  float lum = dot(col, vec3(0.299,0.587,0.114));',
     '  col = mix(col, vec3(lum), 0.10*V);',
     '  col *= mix(vec3(1.0), vec3(1.06,1.0,0.86), V);',
-    // Der Gelbstich des Originalbands: Blau raus, Gelb rein
+    // Farbgebung nach dem Vorbild der Aufnahmen: beleuchtete Flächen warm und
+    // kräftig, die Tiefe dahinter schwarz, die Röhren bleiben weiß ausgebrannt.
     '  if(uYellow > 0.001){',
-    '    float ly = dot(col, vec3(0.36,0.52,0.12));',
-    '    vec3 yel = vec3(ly*1.16, ly*1.02, ly*0.30);',
-    '    col = mix(col, yel, uYellow);',
-    '    col.b *= 1.0 - 0.30*uYellow;',
-    '    col *= 1.0 + 0.06*uYellow;',
+    '    float ly = dot(col, vec3(0.32,0.55,0.13));',
+    '    col = max(col - 0.010, 0.0);',                 // Schwarzpunkt: Ecken laufen zu
+    '    col = pow(col, vec3(1.16));',                  // Mitten runter, mehr Kontrast
+    '    vec3 warm = vec3(ly*1.42, ly*1.07, ly*0.17);',
+    '    float lit  = smoothstep(0.006, 0.12, ly);',    // alles, worauf Licht fällt
+    // Gerechnet wird in 8 Bit, alles über 1 ist längst abgeschnitten. Die Röhren
+    // erkennt man deshalb an ihrer Helligkeit, nicht an einem Wert über 1.
+    '    float blow = smoothstep(0.72, 0.95, ly);',     // Lampen bleiben weiß
+    '    col = mix(col, warm, uYellow * lit * (1.0 - blow));',
+    '    col *= 1.0 + 0.22*uYellow*lit*(1.0 - blow);',
     '  }',
     // Nachtsicht: alles ins Grüne, dunkle Bereiche hochgezogen
     '  if(uNv > 0.001){',
@@ -1046,9 +1152,15 @@ const postMat = new THREE.ShaderMaterial({
     '  col += 0.018*V;',
     '  col *= 1.0 - 0.07*V*(0.5-0.5*sin(uv.y*uRes.y*3.14159));',
     '  col *= 1.0 - 0.03*V*rand(vec2(floor(uv.y*uRes.y), floor(uTime*24.0)));',
-    '  col += (rand(uv*uRes + fract(uTime)*91.7)-0.5)*(0.028+0.04*V+uGlitch*0.10);',
+    // Filmkorn: eine feine und eine gröbere Lage, in den Schatten kräftiger —
+    // so liegt es im Bild statt nur darüber.
+    '  float lf = clamp(dot(col, vec3(0.299,0.587,0.114)), 0.0, 1.0);',
+    '  float g1 = rand(uv*uRes + fract(uTime)*91.7) - 0.5;',
+    '  float g2 = rand(floor(uv*uRes*0.30) + fract(uTime*0.83)*57.3) - 0.5;',
+    '  float korn = (g1*0.085 + g2*0.075) * (0.45 + 0.95*(1.0 - lf));',
+    '  col += korn * (0.85 + 0.7*V + uGlitch*0.8);',
     '  float vig = dot(vUv-0.5, vUv-0.5);',
-    '  col *= 1.0 - vig*(0.85+0.55*V);',
+    '  col *= 1.0 - vig*(1.05+0.60*V);',
     '  vec4 hud = texture2D(tHud, vUv + vec2(ca,0.0));',
     '  col = mix(col, hud.rgb*(1.0-uNv*0.35), hud.a*0.95);',
     '  col = mix(col, vec3(rand(uv*uRes*0.7+uTime*57.3)), uStatic);',
@@ -1218,6 +1330,59 @@ function sndScream(){
   o.connect(dist); dist.connect(g); g.connect(SND.master); o.start(); o.stop(ac.currentTime+1.6);
   burst(0.8, 900, 0.18, 'bandpass');
 }
+/* ---------- Hintergrundmusik ---------- */
+const MUSIC = {
+  list: [], idx: 0, el: null, vol: 0, gap: 0, base: 0.40,
+  on: localStorage.getItem('ft_music') !== '0'
+};
+fetch('assets/music/tracks.json')
+  .then(r => r.json())
+  .then(j => {
+    MUSIC.list = (j.tracks || []).filter(t => t && t.file);
+    for(let i=MUSIC.list.length-1; i>0; i--){            // mischen
+      const k = Math.random()*(i+1)|0;
+      const tmp = MUSIC.list[i]; MUSIC.list[i] = MUSIC.list[k]; MUSIC.list[k] = tmp;
+    }
+  })
+  .catch(() => {});
+
+function musicNext(){
+  if(!MUSIC.list.length || !MUSIC.on) return;
+  const t = MUSIC.list[MUSIC.idx % MUSIC.list.length];
+  MUSIC.idx++;
+  const a = new Audio('assets/music/' + t.file);
+  a.preload = 'auto';
+  a.volume = 0;
+  const done = wartezeit => { if(MUSIC.el === a) MUSIC.el = null; MUSIC.gap = wartezeit; };
+  a.addEventListener('ended', () => done(14 + Math.random()*22));   // Stille zwischen den Stücken
+  a.addEventListener('error', () => done(20));
+  const pr = a.play();
+  if(pr && pr.catch) pr.catch(() => done(20));
+  MUSIC.el = a;
+  MUSIC.vol = 0;
+}
+function musicUpdate(dt, danger, ausblenden){
+  if(!MUSIC.el){
+    if(!MUSIC.on || ausblenden || !MUSIC.list.length) return;
+    MUSIC.gap -= dt;
+    if(MUSIC.gap <= 0) musicNext();
+    return;
+  }
+  const ziel = (!MUSIC.on || ausblenden || !SND.on) ? 0 : MUSIC.base * (1 + danger*0.30);
+  MUSIC.vol += (ziel - MUSIC.vol) * Math.min(dt*(ziel > MUSIC.vol ? 0.55 : 1.2), 1);
+  MUSIC.el.volume = clamp(MUSIC.vol, 0, 1);
+  if(ziel === 0 && MUSIC.vol < 0.004){
+    MUSIC.el.pause();
+    MUSIC.el = null;
+    MUSIC.gap = 6;
+  }
+}
+function setMusic(on){
+  MUSIC.on = on;
+  localStorage.setItem('ft_music', on ? '1' : '0');
+  if(on && !MUSIC.el) MUSIC.gap = 0.5;
+}
+
 function setSound(on){
   SND.on = on;
   if(!SND.ctx) return;
@@ -1327,9 +1492,9 @@ function toggleNv(){
 const S = {
   phase: 'menu',
   t: 0, endT: 0,
-  yaw: 0, pitch: 0,
+  yaw: 0, pitch: 0, yawT: 0, pitchT: 0, swing: 0, tilt: 0,
   pos: new THREE.Vector3(),
-  bob: 0, lastStep: 0,
+  bob: 0, lastStep: 0, speed: 0, gait: 0, eyeY: CFG.eye,
   stamina: CFG.staminaMax,
   battery: 100,
   tapes: 0,
@@ -1351,7 +1516,7 @@ if(!freeP(S.pos.x, S.pos.z)){
     if(freeP(x,z)){ S.pos.x=x; S.pos.z=z; break outer; }
   }
 }
-S.yaw = rnd()*6.28;
+S.yaw = S.yawT = rnd()*6.28;
 
 const toastEl = $('toast');
 let toastT = 0;
@@ -1399,19 +1564,15 @@ function movePlayer(dt, fwd, strafe, speed){
   let dx = (-sy*fwd) + (cy*strafe);
   let dz = (-cy*fwd) - (sy*strafe);
   const l = Math.hypot(dx,dz);
-  if(l < 0.0001) return 0;
-  dx/=l; dz/=l;
+  if(l > 0.0001){ dx/=l; dz/=l; } else { dx=0; dz=0; }
+
+  const x0 = S.pos.x, z0 = S.pos.z;
   const step = speed*dt;
-  const nx = S.pos.x + dx*step, nz = S.pos.z + dz*step;
-  let moved = 0;
-  if(freeP(nx,nz)){ S.pos.x=nx; S.pos.z=nz; moved=step; }
-  else {
-    if(freeP(nx, S.pos.z)){ S.pos.x=nx; moved=Math.abs(dx)*step; }
-    if(freeP(S.pos.x, nz)){ S.pos.z=nz; moved=Math.max(moved, Math.abs(dz)*step); }
-  }
-  S.pos.x = clamp(S.pos.x, 0.3, SPAN-0.3);
-  S.pos.z = clamp(S.pos.z, 0.3, SPAN-0.3);
-  return moved;
+  let px = x0 + dx*step, pz = z0 + dz*step;
+  const out = resolveCircle(px, pz, CFG.radius);
+  S.pos.x = clamp(out[0], 0.3, SPAN-0.3);
+  S.pos.z = clamp(out[1], 0.3, SPAN-0.3);
+  return Math.hypot(S.pos.x-x0, S.pos.z-z0);
 }
 
 /* ---------- Fundstücke ---------- */
@@ -1435,6 +1596,7 @@ function checkItems(dt){
       if(navigator.vibrate) navigator.vibrate(35);
       if(it.kind === 'tape'){
         S.tapes++;
+        monAlert(S.pos.x, S.pos.z, true);   // das hat sie gehört
         if(S.tapes >= CFG.tapes){
           S.exitOpen = true;
           EXIT.sign.material = MAT.signOn;
@@ -1491,6 +1653,7 @@ function startGame(){
   elHud.classList.remove('hidden');
   S.phase = 'play';
   clock.getDelta();
+  musicNext();                       // im Klick starten, sonst blockt der Browser
   toast('BAND LÄUFT', 2.0);
 }
 function pauseGame(){
@@ -1524,7 +1687,7 @@ function endScreen(title, text){
 }
 function die(){
   if(S.phase !== 'play') return;
-  S.phase = 'dead'; S.endT = 0;
+  S.phase = 'dead'; S.endT = 0; S.yawT = S.yaw; S.pitchT = S.pitch;
   sndScream();
   if(navigator.vibrate) navigator.vibrate([120,60,240]);
   if(SND.ctx && SND.on){
@@ -1551,9 +1714,18 @@ let hudAcc = 0;
 function step(dt){
   S.t += dt;
 
-  // Blick
-  S.yaw += IN.dyaw; IN.dyaw = 0;
-  S.pitch = clamp(S.pitch + IN.dpitch, -1.15, 1.15); IN.dpitch = 0;
+  /* Blick: der Finger bewegt das Ziel, die Kamera zieht weich nach und
+     schwingt beim Schwenk leicht nach — ein Camcorder in der Hand steht nie
+     ganz still und dreht sich nicht auf den Punkt. */
+  S.yawT += IN.dyaw; IN.dyaw = 0;
+  S.pitchT = clamp(S.pitchT + IN.dpitch, -1.15, 1.15); IN.dpitch = 0;
+  const folge = 1 - Math.exp(-dt*11);
+  const dYaw = (S.yawT - S.yaw) * folge;
+  S.yaw   += dYaw;
+  S.pitch += (S.pitchT - S.pitch) * folge;
+  const schwenk = dYaw / Math.max(dt, 0.0001);              // rad/s
+  S.swing += (clamp(schwenk*0.030, -0.20, 0.20) - S.swing) * Math.min(dt*5.0, 1);
+  S.tilt  += (clamp(schwenk*0.012, -0.09, 0.09) - S.tilt)  * Math.min(dt*3.5, 1);
 
   // Gehen
   let fwd = 0, strafe = 0;
@@ -1566,30 +1738,44 @@ function step(dt){
   if(mag > 1){ fwd/=mag; strafe/=mag; mag = 1; }
 
   const wantRun = (IN.run || KEY.ShiftLeft || KEY.ShiftRight) && mag > 0.45 && S.stamina > 0.08;
-  const speed = (wantRun ? CFG.sprint : CFG.walk) * mag;
-  const moved = mag > 0.03 ? movePlayer(dt, fwd, strafe, speed) : 0;
 
-  if(wantRun && moved > 0) S.stamina = Math.max(0, S.stamina - dt);
+  /* Tempo weich nachziehen. Vorher sprang es hart zwischen Gehen und
+     Rennen, und mit ihm Wippen, Blickwinkel und Schrittakt — das hat sich
+     angefühlt, als ruckle man vorwärts. */
+  const wanted = (wantRun ? CFG.sprint : CFG.walk) * mag;
+  S.speed += (wanted - S.speed) * Math.min(dt*7, 1);
+  const moved = S.speed > 0.03 ? movePlayer(dt, fwd, strafe, S.speed) : 0;
+  const real  = dt > 0 ? moved/dt : 0;            // was tatsächlich zurückgelegt wurde
+
+  if(wantRun && moved > 0.001) S.stamina = Math.max(0, S.stamina - dt);
   else S.stamina = Math.min(CFG.staminaMax, S.stamina + dt*CFG.staminaRegen);
 
-  // Kopfbewegung und Schritte
-  const walkAmt = moved > 0 ? speed/CFG.walk : 0;
-  S.bob += dt * (wantRun ? 10.4 : 5.4) * Math.min(walkAmt, 1.5);
-  const bobY = Math.sin(S.bob) * (wantRun ? 0.055 : 0.028) * Math.min(walkAmt, 1);
+  // Schrittakt hängt am echten Tempo, nicht an einer Stufe — und wird gedämpft,
+  // damit ein Streifen an der Wand das Wippen nicht abwürgt.
+  S.gait += (real - S.gait) * Math.min(dt*5, 1);
+  const g = clamp(S.gait / CFG.walk, 0, 2.1);
+  S.bob += dt * 3.35 * Math.max(S.gait, 0.001);
+  const bobY = Math.sin(S.bob) * (0.020 + 0.006*g) * Math.min(g, 1.3);
   let noise = 0;
-  if(walkAmt > 0.1){
-    noise = wantRun ? 20 : 9;
-    if(Math.sin(S.bob) < -0.9 && S.t - S.lastStep > 0.2){
+  if(g > 0.15){
+    noise = g > 1.35 ? 20 : 9;
+    if(Math.sin(S.bob) < -0.9 && S.t - S.lastStep > 0.19){
       S.lastStep = S.t;
-      wantRun ? sndRunStep() : sndStep();
+      g > 1.35 ? sndRunStep() : sndStep();
     }
   }
 
-  camera.position.set(S.pos.x, CFG.eye + bobY + Math.sin(S.t*0.5)*0.012, S.pos.z);
-  camera.rotation.set(S.pitch + Math.sin(S.bob*0.5)*0.008*Math.min(walkAmt,1),
-                      S.yaw,
-                      Math.cos(S.bob*0.5)*(wantRun?0.022:0.010)*Math.min(walkAmt,1));
-  camera.fov = 74 + (wantRun ? 3.5 : 0) + Math.sin(S.bob)*0.4*Math.min(walkAmt,1);
+  // Augenhöhe zusätzlich dämpfen, das nimmt dem Wippen die Härte
+  const eyeTarget = CFG.eye + bobY + Math.sin(S.t*0.5)*0.010;
+  S.eyeY += (eyeTarget - S.eyeY) * Math.min(dt*16, 1);
+  // ruhiges Wandern der Hand, damit das Bild nie einrastet
+  const driftY = Math.sin(S.t*0.37)*0.009 + Math.sin(S.t*0.91)*0.0035;
+  const driftP = Math.sin(S.t*0.53 + 1.7)*0.007;
+  camera.position.set(S.pos.x, S.eyeY, S.pos.z);
+  camera.rotation.set(S.pitch + driftP + S.tilt + Math.sin(S.bob*0.5)*0.005*Math.min(g,1),
+                      S.yaw + driftY,
+                      -S.swing + Math.cos(S.bob*0.5)*0.007*Math.min(g,1.4));
+  camera.fov = 74 + Math.min(g,2)*1.1;
   camera.updateProjectionMatrix();
 
   // Akku und Nachtsicht
@@ -1634,6 +1820,7 @@ function step(dt){
     burst(0.10, 90, 0.16 + S.danger*0.2);
     setTimeout(()=>burst(0.08, 80, 0.10 + S.danger*0.14), 150);
   }
+  musicUpdate(dt, S.danger, false);
   S.tick -= dt;
   if(signal > 0.06 && S.tick <= 0){ S.tick = lerp(1.7, 0.14, signal); sndTick(); }
   S.clunk -= dt;
@@ -1666,6 +1853,7 @@ function step(dt){
 
 function deathStep(dt){
   S.endT += dt;
+  musicUpdate(dt, 0, true);
   // Die Kamera dreht sich zu dem, was sie erwischt hat
   const dx = MON.pos.x - S.pos.x, dz = MON.pos.z - S.pos.z;
   const want = Math.atan2(-dx, -dz) + Math.PI;
@@ -1690,6 +1878,7 @@ function deathStep(dt){
 }
 function winStep(dt){
   S.endT += dt;
+  musicUpdate(dt, 0, true);
   S.glitch = Math.min(1, S.endT*0.8);
   postMat.uniforms.uStatic.value = S.endT > 0.6 ? Math.min((S.endT-0.6)*2, 1) : 0;
   if(S.endT > 1.1) postMat.uniforms.uFade.value = Math.max(0, 1-(S.endT-1.1)*1.8);
@@ -1735,6 +1924,12 @@ document.querySelectorAll('.chip[data-q]').forEach(el => {
 }
 $('bStart').addEventListener('click', startGame);
 $('bResume').addEventListener('click', resumeGame);
+{
+  const bm = $('bMusic');
+  const zeigen = () => { bm.textContent = 'MUSIK: ' + (MUSIC.on ? 'AN' : 'AUS'); bm.classList.toggle('sel', MUSIC.on); };
+  zeigen();
+  bm.addEventListener('click', () => { setMusic(!MUSIC.on); zeigen(); });
+}
 $('bQuit').addEventListener('click', () => location.reload());
 $('bNewSeed').addEventListener('click', () => { location.search = '?seed=' + (Math.random()*1e9|0); });
 $('bAgain').addEventListener('click', () => location.reload());

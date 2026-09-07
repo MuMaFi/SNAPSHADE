@@ -12,6 +12,21 @@ android {
     versionName "1.0"
   }
 
+  /* Eigener Schlüssel statt des Android-Debug-Schlüssels. Damit ist die APK
+     eine reguläre Release-Fassung: nicht debuggbar, gleichbleibende Signatur
+     (Updates lassen sich also drüberinstallieren) und Play Protect stuft sie
+     deutlich freundlicher ein. Passwort und Pfad lassen sich über
+     Umgebungsvariablen überschreiben, wenn der Schlüssel nicht im Repo
+     liegen soll. */
+  signingConfigs {
+    release {
+      storeFile     file(System.getenv('FT_KEYSTORE')      ?: '../keystore/foundtape.jks')
+      storePassword System.getenv('FT_KEYSTORE_PASSWORD')  ?: 'foundtape'
+      keyAlias      System.getenv('FT_KEY_ALIAS')          ?: 'foundtape'
+      keyPassword   System.getenv('FT_KEY_PASSWORD')       ?: 'foundtape'
+    }
+  }
+
   buildTypes {
     debug {
       // Das Spiel liegt komplett in den Assets, es wird nichts nachgeladen.
@@ -19,6 +34,8 @@ android {
     }
     release {
       minifyEnabled false
+      debuggable false
+      signingConfig signingConfigs.release
       proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
     }
   }

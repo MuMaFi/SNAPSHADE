@@ -1,10 +1,11 @@
 /* Found Tape — Offline-Cache. Alles liegt lokal, das Spiel läuft ohne Netz. */
-const CACHE = 'foundtape-v1';
+const CACHE = 'foundtape-v2';
 const FILES = [
   './', './index.html', './game.js', './manifest.webmanifest',
   './lib/three.min.js', './lib/GLTFLoader.js',
   './assets/wall.jpg', './assets/wall2.jpg', './assets/floor.jpg',
   './assets/photo.jpg', './assets/monster.glb',
+  './assets/music/tracks.json', './assets/music/handprint.mp3',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png'
 ];
 
@@ -20,8 +21,11 @@ self.addEventListener('fetch', e => {
   if(e.request.method !== 'GET') return;
   e.respondWith(
     caches.match(e.request, { ignoreSearch:true }).then(hit => hit || fetch(e.request).then(res => {
-      const copy = res.clone();
-      caches.open(CACHE).then(c => c.put(e.request, copy)).catch(()=>{});
+      // 206-Teilantworten (Audio-Streaming) gehören nicht in den Cache
+      if(res.status === 200 && res.type === 'basic'){
+        const copy = res.clone();
+        caches.open(CACHE).then(c => c.put(e.request, copy)).catch(()=>{});
+      }
       return res;
     }).catch(() => caches.match('./index.html')))
   );

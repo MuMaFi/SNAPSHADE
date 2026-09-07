@@ -51,13 +51,13 @@ jobs:
           gradle-version: '8.7'
 
       - name: APK bauen
-        run: gradle -p android assembleDebug --no-daemon --stacktrace
+        run: gradle -p android assembleRelease --no-daemon --stacktrace
 
       - name: APK hochladen
         uses: actions/upload-artifact@v4
         with:
           name: foundtape-apk
-          path: android/app/build/outputs/apk/debug/*.apk
+          path: android/app/build/outputs/apk/release/*.apk
           if-no-files-found: error
           retention-days: 30
 
@@ -68,8 +68,8 @@ jobs:
         run: |
           gh release delete apk-latest --yes --cleanup-tag || true
           gh release create apk-latest \
-            android/app/build/outputs/apk/debug/*.apk \
+            android/app/build/outputs/apk/release/*.apk \
             --title "Found Tape — aktuelle APK" \
-            --notes "Debug-signierte APK aus $GITHUB_SHA. Auf dem Handy herunterladen, Installation aus unbekannten Quellen erlauben, installieren." \
+            --notes "Signierte Release-APK aus $GITHUB_SHA. Auf dem Handy herunterladen und antippen; beim ersten Mal muss die Installation aus dieser Quelle einmalig erlaubt werden." \
             --prerelease \
             --target "$GITHUB_SHA"
