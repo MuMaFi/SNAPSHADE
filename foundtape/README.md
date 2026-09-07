@@ -3,10 +3,33 @@
 Ein Backrooms-Horrorspiel fürs Handy. Aus dem gefundenen Band ist ein Spiel geworden:
 Statt einer Kamerafahrt, die von allein läuft, hältst du den Camcorder jetzt selbst.
 
-**Ziel:** sechs verlorene Bänder einsammeln, danach den Ausgang finden — und dem,
+**Ziel:** die verlorenen Bänder einsammeln, danach den Ausgang finden — und dem,
 was hier unten mitläuft, nicht zu nahe kommen.
 
+Der Ablauf: Vorspann → Titelbild → Schwierigkeit → Auftrag → Band läuft.
+
 ---
+
+## Eine einzelne Datei zum Weitergeben
+
+`dist/foundtape.html` enthält alles — Spiel, three.js, Texturen, Modell, Foto und
+Musik. Doppelklick genügt, kein Server, kein Netz. Neu gebaut wird sie mit
+
+```bash
+python3 tools/build-single.py            # dist/foundtape.html
+python3 tools/build-single.py --ohne-musik   # deutlich kleiner
+```
+
+## Schwierigkeit
+
+| Grad | Bänder | Die Gestalt | Camcorder |
+|---|---|---|---|
+| **BABY** | 4 | langsam (2,75 m/s), kurze Sicht, gibt schnell auf | 8 s Sprint, sparsamer Akku, 6 Ersatzakkus |
+| **NORMAL** | 6 | 3,35 m/s, 26 m Sicht | 6 s Sprint, 5 Ersatzakkus |
+| **EXTREME** | 8 | 3,95 m/s — schneller als dein Sprint es lange durchhält, 34 m Sicht, fast rundum, bleibt lange dran | 4,5 s Sprint, hungrige Nachtsicht, 4 Ersatzakkus |
+
+Mit jedem gefundenen Band wird sie in der Jagd etwas schneller; auf EXTREME
+deutlich stärker als auf BABY.
 
 ## Spielen
 
@@ -72,8 +95,9 @@ dazu: MP3 in den Ordner legen, eine Zeile in `tracks.json` ergänzen —
 { "file": "meinstueck.mp3", "titel": "Mein Stück", "von": "Wer es gemacht hat" }
 ```
 
-Die Liste wird beim Start gemischt, zwischen den Stücken liegt Stille, und in der
-Nähe der Gestalt wird die Musik etwas lauter. Ein- und ausschalten lässt sie sich
+Die Musik läuft **nur in den Menüs** — im Spiel bleibt es beim Brummen, beim
+Rauschen und bei dem, was in den Gängen unterwegs ist. Die Liste wird beim Start
+gemischt, zwischen den Stücken liegt Stille. Ein- und ausschalten lässt sie sich
 im Pausenbildschirm (`II` oben rechts); die Einstellung wird gemerkt.
 Für die APK und den Offline-Cache gilt: neue Dateien bitte auch in
 [`sw.js`](sw.js) in die Liste `FILES` eintragen.

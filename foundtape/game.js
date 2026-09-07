@@ -46,6 +46,10 @@ const CFG = {
   monWalk:    1.45,   // streift umher
   monHunt:    3.35,   // jagt (langsamer als Sprint, schneller als Gehen)
   monCatch:   1.15,
+  dirMin:     12,
+  dirRnd:     8,
+  verlier:    6.5,
+  steigerung: 0.075,
   monSight:   26,
   monCone:    Math.cos(1.28),   // ~147° Sichtfeld
 
@@ -53,8 +57,8 @@ const CFG = {
   drainNv:    0.62,
   batteryGain: 26,
 
-  exposure:   1.02,
-  lightPower: 7.6,
+  exposure:   0.66,
+  lightPower: 5.2,
   fog:        0.038,
   vhs:        0.42,
   yellow:     PARAMS.has('yellow') ? +PARAMS.get('yellow') : 1.0,   // Gelbstich, 0 = aus, 1 = voll
@@ -62,6 +66,27 @@ const CFG = {
 };
 
 let quality = QUALITY[localStorage.getItem('ft_q') || (IS_TOUCH ? 'mid' : 'high')] || QUALITY.mid;
+
+/* Schwierigkeitsgrade. Die Etage wird immer mit der größten Zahl an Fundstücken
+   gebaut; überzählige werden beim Start abgeschaltet. So lässt sich der Grad
+   noch im Menü wechseln, ohne alles neu zu erzeugen. */
+const MAXTAPES = 8, MAXBATT = 7;
+const DIFFS = {
+  baby: {
+    tapes:4, batts:6, hunt:2.75, sight:18, cone:Math.cos(1.00), fang:1.00,
+    stamina:8.0, regen:0.85, drainNv:0.45, dirMin:20, dirRnd:12, verlier:4.5, steigerung:0.03
+  },
+  normal: {
+    tapes:6, batts:5, hunt:3.35, sight:26, cone:Math.cos(1.28), fang:1.15,
+    stamina:6.0, regen:0.62, drainNv:0.62, dirMin:12, dirRnd:8,  verlier:6.5, steigerung:0.075
+  },
+  extreme: {
+    tapes:8, batts:4, hunt:3.95, sight:34, cone:Math.cos(1.55), fang:1.35,
+    stamina:4.5, regen:0.45, drainNv:0.85, dirMin:7,  dirRnd:5,  verlier:9.0, steigerung:0.11
+  }
+};
+let diffKey = localStorage.getItem('ft_diff') || 'normal';
+if(!DIFFS[diffKey]) diffKey = 'normal';
 
 /* Zufall mit Seed — dasselbe Band ergibt dieselbe Etage */
 function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a);
@@ -73,6 +98,10 @@ const clamp = (v,a,b) => v<a?a:(v>b?b:v);
 const lerp = (a,b,t) => a+(b-a)*t;
 
 const $ = id => document.getElementById(id);
+
+/* Dateipfade laufen über diese Stelle. In der Einzeldatei-Fassung liegt in
+   window.FT_ASSETS für jeden Pfad der eingebettete Inhalt. */
+const A = u => (window.FT_ASSETS && window.FT_ASSETS[u]) || u;
 
 /* ====================== 2  Renderer und Material ====================== */
 
@@ -190,9 +219,9 @@ function labelTex(){
 const CS = CFG.cell, G = CFG.grid, WH = CFG.wallH, SPAN = G*CS;
 
 const ceilMap  = fromCanvas(ceilTex(), G, G);
-const wallMap  = fromFile('assets/wall.jpg', 1.6, 1.15);
-const wall2Map = fromFile('assets/wall2.jpg', 1.2, 1.0);
-const floorMap = fromFile('assets/floor.jpg', G*4, G*4);
+const wallMap  = fromFile(A('assets/wall.jpg'), 1.6, 1.15);
+const wall2Map = fromFile(A('assets/wall2.jpg'), 1.2, 1.0);
+const floorMap = fromFile(A('assets/floor.jpg'), G*4, G*4);
 const stainMap = new THREE.CanvasTexture(stainAlpha());
 
 const MAT = {
@@ -202,7 +231,7 @@ const MAT = {
   floor: new THREE.MeshStandardMaterial({ map:floorMap, roughness:0.99, metalness:0,
                                           color:0xc3b988, bumpMap:floorMap, bumpScale:0.03 }),
   ceil:  new THREE.MeshStandardMaterial({ map:ceilMap, roughness:0.96, metalness:0,
-                                          emissive:0x1d1a10, emissiveMap:ceilMap }),
+                                          emissive:0x121009, emissiveMap:ceilMap }),
   base:  new THREE.MeshStandardMaterial({ color:0xd8cd8e, roughness:0.55, metalness:0.05 }),
   hous:  new THREE.MeshStandardMaterial({ color:0xb3ad90, roughness:0.5, metalness:0.25 }),
   tube:  new THREE.MeshBasicMaterial({ color:0xfff6e0, fog:false }),
@@ -225,7 +254,7 @@ const MAT = {
   door:  new THREE.MeshStandardMaterial({ color:0x6d6a5c, roughness:0.45, metalness:0.6 }),
   signOn:  new THREE.MeshBasicMaterial({ color:0x39d15a, fog:false }),
   signOff: new THREE.MeshBasicMaterial({ color:0x3a1414, fog:false }),
-  photo: new THREE.MeshStandardMaterial({ map:fromFile('assets/photo.jpg',1,1), roughness:0.8, metalness:0 })
+  photo: new THREE.MeshStandardMaterial({ map:fromFile(A('assets/photo.jpg'),1,1), roughness:0.8, metalness:0 })
 };
 const TUBECOL = new THREE.Color(2.15, 1.98, 1.6);
 
@@ -591,8 +620,8 @@ for(let i=0;i<quality.lights;i++){
   }
   scene.add(pl); rig.push(pl);
 }
-scene.add(new THREE.HemisphereLight(0xffe0a4, 0x2a2109, 0.07));
-scene.add(new THREE.AmbientLight(0x0b0906, 1.0));
+scene.add(new THREE.HemisphereLight(0xffe0a4, 0x2a2109, 0.035));
+scene.add(new THREE.AmbientLight(0x050403, 1.0));
 
 // Nachtsicht-Aufheller am Camcorder
 const nvLight = new THREE.PointLight(0xcfe4ff, 0, 15, 1.8);
@@ -821,7 +850,7 @@ function battMesh(){
   return g;
 }
 {
-  const tapeCells = spreadCells(CFG.tapes, 4, 4);
+  const tapeCells = spreadCells(MAXTAPES, 4, 4);
   for(const c of tapeCells){
     const p = cellCenter(c, 0.045);
     p.x += (rnd()-0.5)*1.8; p.z += (rnd()-0.5)*1.8;
@@ -829,7 +858,7 @@ function battMesh(){
     const m = tapeMesh(); m.rotation.y = rnd()*6.28;
     addItem('tape', m, p);
   }
-  const battCells = spreadCells(CFG.batteries, 3, 3);
+  const battCells = spreadCells(MAXBATT, 3, 3);
   for(const c of battCells){
     const p = cellCenter(c, 0.03);
     p.x += (rnd()-0.5)*1.6; p.z += (rnd()-0.5)*1.6;
@@ -885,7 +914,7 @@ scene.add(MON.group);
   const fb = fallbackMonster();
   MON.group.add(fb); MON.body = fb;
   const loader = new THREE.GLTFLoader(loadMgr);
-  loader.load('assets/monster.glb', gl => {
+  loader.load(A('assets/monster.glb'), gl => {
     const m = gl.scene;
     const box = new THREE.Box3().setFromObject(m), sz = new THREE.Vector3();
     box.getSize(sz);
@@ -977,7 +1006,7 @@ function updateMonster(dt, player, noiseRadius){
      nah genug für eine Begegnung, ohne dass sie direkt auf ihn zuläuft. */
   MON.dirT -= dt;
   if(MON.dirT <= 0){
-    MON.dirT = 12 + Math.random()*8;
+    MON.dirT = CFG.dirMin + Math.random()*CFG.dirRnd;
     if(MON.state === 'roam' && distP > 26){
       const pc = cellOf(player.x, player.z), px = pc%G, py = (pc/G)|0;
       for(let t=0;t<40;t++){
@@ -1006,7 +1035,7 @@ function updateMonster(dt, player, noiseRadius){
 
   MON.repath -= dt;
   if(MON.state === 'hunt'){
-    if(MON.seenT > 6.5){ MON.state='search'; MON.searchT=12; MON.repath=0; }
+    if(MON.seenT > CFG.verlier){ MON.state='search'; MON.searchT=12; MON.repath=0; }
     else if(MON.repath <= 0){ MON.repath = 0.55; monSetPath(cellOf(MON.lastSeen.x, MON.lastSeen.z)); }
   } else if(MON.state === 'search'){
     MON.searchT -= dt;
@@ -1022,7 +1051,7 @@ function updateMonster(dt, player, noiseRadius){
   }
 
   // Bewegung entlang des Weges
-  const hunted = CFG.monHunt + (S.tapes || 0)*0.075;    // mit jedem Band wird sie zäher
+  const hunted = CFG.monHunt + (S.tapes || 0)*CFG.steigerung;   // mit jedem Band wird sie zäher
   const speed = MON.state==='hunt' ? hunted : (MON.state==='search' ? CFG.monWalk*1.6 : CFG.monWalk*1.15);
   let tx, tz;
   if(MON.state === 'hunt' && distP < 7 && losClear(MON.pos.x, MON.pos.z, player.x, player.z)){
@@ -1130,15 +1159,15 @@ const postMat = new THREE.ShaderMaterial({
     // kräftig, die Tiefe dahinter schwarz, die Röhren bleiben weiß ausgebrannt.
     '  if(uYellow > 0.001){',
     '    float ly = dot(col, vec3(0.32,0.55,0.13));',
-    '    col = max(col - 0.010, 0.0);',                 // Schwarzpunkt: Ecken laufen zu
+    '    col = max(col - 0.020, 0.0);',                 // Schwarzpunkt: Ecken laufen zu
     '    col = pow(col, vec3(1.16));',                  // Mitten runter, mehr Kontrast
-    '    vec3 warm = vec3(ly*1.42, ly*1.07, ly*0.17);',
+    '    vec3 warm = vec3(ly*1.16, ly*0.88, ly*0.14);',
     '    float lit  = smoothstep(0.006, 0.12, ly);',    // alles, worauf Licht fällt
     // Gerechnet wird in 8 Bit, alles über 1 ist längst abgeschnitten. Die Röhren
     // erkennt man deshalb an ihrer Helligkeit, nicht an einem Wert über 1.
     '    float blow = smoothstep(0.72, 0.95, ly);',     // Lampen bleiben weiß
     '    col = mix(col, warm, uYellow * lit * (1.0 - blow));',
-    '    col *= 1.0 + 0.22*uYellow*lit*(1.0 - blow);',
+    '    col *= 1.0 + 0.15*uYellow*lit*(1.0 - blow);',
     '  }',
     // Nachtsicht: alles ins Grüne, dunkle Bereiche hochgezogen
     '  if(uNv > 0.001){',
@@ -1335,7 +1364,7 @@ const MUSIC = {
   list: [], idx: 0, el: null, vol: 0, gap: 0, base: 0.40,
   on: localStorage.getItem('ft_music') !== '0'
 };
-fetch('assets/music/tracks.json')
+fetch(A('assets/music/tracks.json'))
   .then(r => r.json())
   .then(j => {
     MUSIC.list = (j.tracks || []).filter(t => t && t.file);
@@ -1346,11 +1375,13 @@ fetch('assets/music/tracks.json')
   })
   .catch(() => {});
 
+function musikAn(){ MUSIC.gap = 0; musicNext(); }
+
 function musicNext(){
   if(!MUSIC.list.length || !MUSIC.on) return;
   const t = MUSIC.list[MUSIC.idx % MUSIC.list.length];
   MUSIC.idx++;
-  const a = new Audio('assets/music/' + t.file);
+  const a = new Audio(A('assets/music/' + t.file));
   a.preload = 'auto';
   a.volume = 0;
   const done = wartezeit => { if(MUSIC.el === a) MUSIC.el = null; MUSIC.gap = wartezeit; };
@@ -1518,6 +1549,37 @@ if(!freeP(S.pos.x, S.pos.z)){
 }
 S.yaw = S.yawT = rnd()*6.28;
 
+/* Setzt einen Schwierigkeitsgrad. Überzählige Fundstücke verschwinden,
+   die Werte der Gestalt und des Camcorders wandern in CFG. */
+function applyDifficulty(key){
+  if(!DIFFS[key]) key = 'normal';
+  diffKey = key;
+  localStorage.setItem('ft_diff', key);
+  const d = DIFFS[key];
+
+  CFG.tapes = d.tapes;       CFG.batteries = d.batts;
+  CFG.monHunt = d.hunt;      CFG.monSight = d.sight;
+  CFG.monCone = d.cone;      CFG.monCatch = d.fang;
+  CFG.staminaMax = d.stamina;CFG.staminaRegen = d.regen;
+  CFG.drainNv = d.drainNv;
+  CFG.dirMin = d.dirMin;     CFG.dirRnd = d.dirRnd;
+  CFG.verlier = d.verlier;   CFG.steigerung = d.steigerung;
+  S.stamina = d.stamina;
+
+  let t = 0, b = 0;
+  for(const it of items){
+    if(it.kind === 'tape'){
+      const an = t++ < d.tapes;
+      it.taken = !an; it.obj.visible = an;
+    } else if(it.kind === 'batt'){
+      const an = b++ < d.batts;
+      it.taken = !an; it.obj.visible = an;
+    }
+  }
+  const ziel = $('tapeGoal');
+  if(ziel) ziel.textContent = d.tapes;
+}
+
 const toastEl = $('toast');
 let toastT = 0;
 function toast(msg, secs){
@@ -1632,7 +1694,7 @@ function checkDoor(){
 }
 
 /* ---------- Zustandswechsel ---------- */
-const scStart = $('scStart'), scPause = $('scPause'), scEnd = $('scEnd');
+const scPause = $('scPause'), scEnd = $('scEnd');
 let wakeLock = null;
 
 async function goFullscreen(){
@@ -1648,12 +1710,10 @@ function startGame(){
   initAudio();
   if(SND.ctx && SND.ctx.state === 'suspended') SND.ctx.resume();
   goFullscreen();
-  scStart.classList.add('hidden');
-  scEnd.classList.add('hidden');
+  for(const m of MENUS) if(m) m.classList.add('hidden');
   elHud.classList.remove('hidden');
   S.phase = 'play';
   clock.getDelta();
-  musicNext();                       // im Klick starten, sonst blockt der Browser
   toast('BAND LÄUFT', 2.0);
 }
 function pauseGame(){
@@ -1820,7 +1880,6 @@ function step(dt){
     burst(0.10, 90, 0.16 + S.danger*0.2);
     setTimeout(()=>burst(0.08, 80, 0.10 + S.danger*0.14), 150);
   }
-  musicUpdate(dt, S.danger, false);
   S.tick -= dt;
   if(signal > 0.06 && S.tick <= 0){ S.tick = lerp(1.7, 0.14, signal); sndTick(); }
   S.clunk -= dt;
@@ -1853,7 +1912,6 @@ function step(dt){
 
 function deathStep(dt){
   S.endT += dt;
-  musicUpdate(dt, 0, true);
   // Die Kamera dreht sich zu dem, was sie erwischt hat
   const dx = MON.pos.x - S.pos.x, dz = MON.pos.z - S.pos.z;
   const want = Math.atan2(-dx, -dz) + Math.PI;
@@ -1878,7 +1936,6 @@ function deathStep(dt){
 }
 function winStep(dt){
   S.endT += dt;
-  musicUpdate(dt, 0, true);
   S.glitch = Math.min(1, S.endT*0.8);
   postMat.uniforms.uStatic.value = S.endT > 0.6 ? Math.min((S.endT-0.6)*2, 1) : 0;
   if(S.endT > 1.1) postMat.uniforms.uFade.value = Math.max(0, 1-(S.endT-1.1)*1.8);
@@ -1910,7 +1967,26 @@ function frame(){
   render();
 }
 
-/* ---------- Menü ---------- */
+applyDifficulty(diffKey);        // gespeicherte Wahl gilt sofort
+
+/* ---------- Menüfluss: Vorspann, Titel, Schwierigkeit, Briefing ---------- */
+const scSplash = $('scSplash'), scTitle = $('scTitle'), scDiff = $('scDiff'), scBrief = $('scBrief');
+const MENUS = [scSplash, scTitle, scDiff, scBrief, scPause, scEnd];
+function zeige(el){
+  for(const m of MENUS) if(m) m.classList.add('hidden');
+  if(el) el.classList.remove('hidden');
+}
+
+// Der Vorspann läuft einmal je Sitzung; nach einem Neuladen wegen der
+// Bildqualität soll man nicht wieder davorsitzen.
+let vorspannLaeuft = sessionStorage.getItem('ft_intro') !== '1';
+if(!vorspannLaeuft) zeige(scTitle);
+else {
+  sessionStorage.setItem('ft_intro', '1');
+  setTimeout(() => { if(!scSplash.classList.contains('hidden')) zeige(scTitle); }, 3200);
+  scSplash.addEventListener('click', () => zeige(scTitle));
+}
+
 document.querySelectorAll('.chip[data-q]').forEach(el => {
   el.addEventListener('click', () => {
     localStorage.setItem('ft_q', el.dataset.q);
@@ -1920,9 +1996,29 @@ document.querySelectorAll('.chip[data-q]').forEach(el => {
 {
   const cur = localStorage.getItem('ft_q') || (IS_TOUCH ? 'mid' : 'high');
   document.querySelectorAll('.chip[data-q]').forEach(el => el.classList.toggle('sel', el.dataset.q === cur));
-  $('tapeGoal').textContent = CFG.tapes;
 }
-$('bStart').addEventListener('click', startGame);
+
+document.querySelectorAll('.diff[data-diff]').forEach(el => {
+  el.classList.toggle('sel', el.dataset.diff === diffKey);
+  el.addEventListener('click', () => {
+    document.querySelectorAll('.diff[data-diff]').forEach(o => o.classList.remove('sel'));
+    el.classList.add('sel');
+    applyDifficulty(el.dataset.diff);
+  });
+});
+
+$('bStart').addEventListener('click', () => {
+  initAudio();                       // im Klick, sonst blockt der Browser den Ton
+  if(SND.ctx && SND.ctx.state === 'suspended') SND.ctx.resume();
+  musikAn();
+  zeige(scDiff);
+});
+$('bBackTitle').addEventListener('click', () => zeige(scTitle));
+$('bPlay').addEventListener('click', () => {
+  applyDifficulty(diffKey);
+  zeige(scBrief);
+});
+scBrief.addEventListener('click', startGame);
 $('bResume').addEventListener('click', resumeGame);
 {
   const bm = $('bMusic');
@@ -1958,6 +2054,16 @@ document.addEventListener('visibilitychange', () => { if(document.hidden && S.ph
   }, 120);
   setTimeout(() => { clearInterval(poll); ready(); }, 9000);   // Notausstieg
 }
+
+/* Die Musik gehört ins Menü. Während des Spiels bleibt es beim Brummen,
+   Rauschen und dem, was in den Gängen unterwegs ist. */
+let warImSpiel = false;
+setInterval(() => {
+  const imSpiel = (S.phase === 'play');
+  if(warImSpiel && !imSpiel) MUSIC.gap = Math.min(MUSIC.gap, 1.4);   // zurück ins Menü: zügig wieder Musik
+  warImSpiel = imSpiel;
+  musicUpdate(0.12, 0, imSpiel);
+}, 120);
 
 drawHud();
 frame();
