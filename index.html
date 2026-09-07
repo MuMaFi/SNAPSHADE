@@ -46,6 +46,7 @@
   #bRun{ right:22px; bottom:calc(30px + var(--safe-b)); width:92px; height:92px; font-size:12px; }
   #bNv { right:126px; bottom:calc(46px + var(--safe-b)); width:66px; height:66px; }
   #bNv.act{ border-color:#6fce7a; color:#8ee89a; }
+  #bRun.leer{ border-color:rgba(190,90,60,.40); color:rgba(200,120,90,.55); }
   #bUse{
     right:22px; bottom:calc(140px + var(--safe-b)); width:92px; height:60px; border-radius:8px;
     font-size:11px; display:none; border-color:rgba(240,222,160,.6); color:#f0dea0;
@@ -4034,7 +4035,7 @@ const CFG = {
   walk:       2.35,
   sprint:     4.65,
   staminaMax: 6.0,
-  staminaRegen: 0.62,
+  staminaRegen: 0.95,
 
   tapes:      6,
   batteries:  5,
@@ -4070,15 +4071,15 @@ const MAXTAPES = 8, MAXBATT = 7;
 const DIFFS = {
   baby: {
     tapes:4, batts:6, hunt:2.75, sight:18, cone:Math.cos(1.00), fang:1.00,
-    stamina:8.0, regen:0.85, drainNv:0.45, dirMin:20, dirRnd:12, verlier:4.5, steigerung:0.03
+    stamina:8.0, regen:1.30, drainNv:0.45, dirMin:20, dirRnd:12, verlier:4.5, steigerung:0.03
   },
   normal: {
     tapes:6, batts:5, hunt:3.35, sight:26, cone:Math.cos(1.28), fang:1.15,
-    stamina:6.0, regen:0.62, drainNv:0.62, dirMin:12, dirRnd:8,  verlier:6.5, steigerung:0.075
+    stamina:6.0, regen:0.95, drainNv:0.62, dirMin:12, dirRnd:8,  verlier:6.5, steigerung:0.075
   },
   extreme: {
     tapes:8, batts:4, hunt:3.95, sight:34, cone:Math.cos(1.55), fang:1.35,
-    stamina:4.5, regen:0.45, drainNv:0.85, dirMin:7,  dirRnd:5,  verlier:9.0, steigerung:0.11
+    stamina:4.5, regen:0.70, drainNv:0.85, dirMin:7,  dirRnd:5,  verlier:9.0, steigerung:0.11
   }
 };
 let diffKey = localStorage.getItem('ft_diff') || 'normal';
@@ -5366,8 +5367,11 @@ function drawHud(){
 
   const sy = by - F*0.62;                        // Ausdauer
   hudX.fillStyle = 'rgba(150,142,110,0.34)'; hudX.fillRect(bx, sy, bw, 4);
-  hudX.fillStyle = HUDS.stamina > 0.2 ? 'rgba(206,196,156,0.75)' : 'rgba(206,120,80,0.8)';
-  hudX.fillRect(bx, sy, bw*clamp(HUDS.stamina,0,1), 4);
+  // Wer rennen will, aber nicht mehr kann, sieht den Balken blinken
+  const leer = HUDS.ausgepustet && Math.sin(HUDS.time*14) > 0;
+  hudX.fillStyle = leer ? 'rgba(226,90,60,0.95)'
+                 : (HUDS.stamina > 0.2 ? 'rgba(206,196,156,0.75)' : 'rgba(206,120,80,0.8)');
+  hudX.fillRect(bx, sy, bw*Math.max(clamp(HUDS.stamina,0,1), leer ? 0.12 : 0), 4);
 
   if(HUDS.signal > 0.01){                        // Bandsignal
     const gy = sy - F*0.72;
@@ -5720,7 +5724,7 @@ const S = {
   t: 0, endT: 0,
   yaw: 0, pitch: 0, yawT: 0, pitchT: 0, swing: 0, tilt: 0,
   pos: new THREE.Vector3(),
-  bob: 0, lastStep: 0, speed: 0, gait: 0, eyeY: CFG.eye,
+  bob: 0, lastStep: 0, speed: 0, gait: 0, eyeY: CFG.eye, pusteLos: false,
   stamina: CFG.staminaMax,
   battery: 100,
   tapes: 0,
@@ -6024,7 +6028,14 @@ function step(dt){
   let mag = Math.hypot(fwd, strafe);
   if(mag > 1){ fwd/=mag; strafe/=mag; mag = 1; }
 
-  const wantRun = (IN.run || KEY.ShiftLeft || KEY.ShiftRight) && mag > 0.45 && S.stamina > 0.08;
+  /* RENNEN verlangte bisher, dass der Stick über 45 % ausgeschlagen ist. Wer
+     den Daumen nur ein Stück bewegt, hielt den Knopf und ging trotzdem im
+     Schritt — der Knopf wirkte kaputt. Jetzt genügt eine Bewegungsabsicht,
+     und der Knopf schiebt den Ausschlag selbst auf Anschlag. */
+  const willRennen = (IN.run || KEY.ShiftLeft || KEY.ShiftRight) && mag > 0.12;
+  const wantRun = willRennen && S.stamina > 0.05;
+  if(wantRun && mag < 1){ fwd /= mag; strafe /= mag; mag = 1; }
+  S.pusteLos = willRennen && !wantRun;        // gedrückt, aber die Luft ist weg
 
   /* Tempo weich nachziehen. Vorher sprang es hart zwischen Gehen und
      Rennen, und mit ihm Wippen, Blickwinkel und Schrittakt — das hat sich
@@ -6132,6 +6143,8 @@ function step(dt){
 
   HUDS.tapes = S.tapes; HUDS.battery = S.battery; HUDS.time = S.t;
   HUDS.stamina = S.stamina/CFG.staminaMax; HUDS.signal = signal; HUDS.nv = IN.nv;
+  HUDS.ausgepustet = S.pusteLos;
+  bRun.classList.toggle('leer', S.stamina < 0.35);
   // Der Pfeil erscheint mit dem Foto — und spätestens, wenn alle Bänder da sind
   HUDS.exit = (S.hasPhoto || S.exitOpen)
     ? (Math.atan2(EXIT.pos.x - S.pos.x, -(EXIT.pos.z - S.pos.z)) + S.yaw) : null;
