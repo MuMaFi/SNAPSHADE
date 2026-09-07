@@ -79,6 +79,11 @@ packt das Spiel in eine WebView-App und legt die fertige APK als Artefakt ab:
    `app-debug.apk` aufs Handy schieben und installieren
    („Installation aus unbekannten Quellen" muss erlaubt sein).
 
+Bequemer fürs Handy: beim Start des Workflows den Haken **„APK zusätzlich als Release
+veröffentlichen"** setzen. Dann landet die APK unter **Releases** als `apk-latest` und
+lässt sich direkt auf dem Telefon herunterladen und antippen — ohne Umweg über
+Artefakt-Zip und Rechner.
+
 Lokal geht es genauso, wenn das Android SDK installiert ist:
 
 ```bash

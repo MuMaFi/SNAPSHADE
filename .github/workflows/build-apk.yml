@@ -2,6 +2,11 @@ name: APK bauen
 
 on:
   workflow_dispatch:
+    inputs:
+      release:
+        description: 'APK zusätzlich als Release veröffentlichen (dann lädt sie das Handy direkt herunter)'
+        type: boolean
+        default: false
   push:
     paths:
       - 'foundtape/**'
@@ -9,7 +14,7 @@ on:
       - '.github/workflows/build-apk.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   apk:
@@ -55,3 +60,16 @@ jobs:
           path: android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 30
+
+      - name: APK als Release veröffentlichen
+        if: github.event_name == 'workflow_dispatch' && inputs.release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete apk-latest --yes --cleanup-tag || true
+          gh release create apk-latest \
+            android/app/build/outputs/apk/debug/*.apk \
+            --title "Found Tape — aktuelle APK" \
+            --notes "Debug-signierte APK aus $GITHUB_SHA. Auf dem Handy herunterladen, Installation aus unbekannten Quellen erlauben, installieren." \
+            --prerelease \
+            --target "$GITHUB_SHA"

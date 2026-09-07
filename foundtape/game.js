@@ -1657,7 +1657,9 @@ function step(dt){
 
   HUDS.tapes = S.tapes; HUDS.battery = S.battery; HUDS.time = S.t;
   HUDS.stamina = S.stamina/CFG.staminaMax; HUDS.signal = signal; HUDS.nv = IN.nv;
-  HUDS.exit = S.hasPhoto ? (Math.atan2(EXIT.pos.x - S.pos.x, -(EXIT.pos.z - S.pos.z)) + S.yaw) : null;
+  // Der Pfeil erscheint mit dem Foto — und spätestens, wenn alle Bänder da sind
+  HUDS.exit = (S.hasPhoto || S.exitOpen)
+    ? (Math.atan2(EXIT.pos.x - S.pos.x, -(EXIT.pos.z - S.pos.z)) + S.yaw) : null;
 
   if(toastT > 0){ toastT -= dt; if(toastT <= 0) toastEl.classList.remove('on'); }
 }
