@@ -4397,6 +4397,47 @@ function bfs(start){
   }
   return { prev, dist };
 }
+/* Die Zellensuche kennt nur Wandkanten und Pfeiler. Die frei stehenden Wände
+   des nachgebauten Ortes stecken dagegen in SOLIDS — für die Gestalt muss die
+   Verbindung zweier Zellen deshalb zusätzlich am Begehbarkeitsraster geprüft
+   werden, sonst plant sie Wege quer durch diese Wände. */
+function kanteOffen(x, y, nx, ny){
+  if(!OCC_M) return true;
+  const ax = x*CS+CS/2, az = y*CS+CS/2, bx = nx*CS+CS/2, bz = ny*CS+CS/2;
+  for(let i=0;i<=8;i++){
+    const t = i/8;
+    if(!freeIn(OCC_M, ax+(bx-ax)*t, az+(bz-az)*t)) return false;
+  }
+  return true;
+}
+function nachbarnMon(i, out){
+  const x=i%G, y=(i/G)|0; out.length=0;
+  if(canGo(x,y,x+1,y) && kanteOffen(x,y,x+1,y)) out.push(idx(x+1,y));
+  if(canGo(x,y,x-1,y) && kanteOffen(x,y,x-1,y)) out.push(idx(x-1,y));
+  if(canGo(x,y,x,y+1) && kanteOffen(x,y,x,y+1)) out.push(idx(x,y+1));
+  if(canGo(x,y,x,y-1) && kanteOffen(x,y,x,y-1)) out.push(idx(x,y-1));
+  return out;
+}
+/* Weg für die Gestalt. Findet sich keiner (etwa weil sie in einer Nische
+   steht), wird auf die grobe Suche zurückgefallen. */
+function pathToMon(from, to){
+  const prev = new Int32Array(G*G).fill(-1);
+  const dist = new Int32Array(G*G).fill(-1);
+  const buf = [];
+  dist[from] = 0;
+  const q = [from];
+  for(let h=0; h<q.length; h++){
+    const cur = q[h];
+    if(cur === to) break;
+    for(const n of nachbarnMon(cur, buf)) if(dist[n] < 0){ dist[n]=dist[cur]+1; prev[n]=cur; q.push(n); }
+  }
+  if(dist[to] < 0) return pathTo(from, to);
+  const out = []; let c = to;
+  while(c >= 0 && c !== from){ out.push(c); c = prev[c]; }
+  out.reverse();
+  return out;
+}
+
 // Weg als Liste von Zellen (start ausgenommen)
 function pathTo(from, to){
   const { prev, dist } = bfs(from);
@@ -4944,7 +4985,7 @@ const cellOf = (x,z) => idx(clamp(Math.floor(x/CS),0,G-1), clamp(Math.floor(z/CS
 
 function monSetPath(toCell){
   const from = cellOf(MON.pos.x, MON.pos.z);
-  const p = pathTo(from, toCell);
+  const p = pathToMon(from, toCell);
   MON.path = (p && p.length) ? p : null;
   MON.pathIdx = 0;
 }
@@ -5358,6 +5399,7 @@ function sndScream(){
 /* ---------- Hintergrundmusik ---------- */
 const MUSIC = {
   list: [], idx: 0, el: null, vol: 0, gap: 0, base: 0.40,
+  gain: null, quelle: null,
   on: localStorage.getItem('ft_music') !== '0'
 };
 fetch(A('assets/music/tracks.json'))
@@ -5379,35 +5421,73 @@ function musicNext(){
   MUSIC.idx++;
   const a = new Audio(A('assets/music/' + t.file));
   a.preload = 'auto';
-  a.volume = 0;
-  const done = wartezeit => { if(MUSIC.el === a) MUSIC.el = null; MUSIC.gap = wartezeit; };
+  const done = wartezeit => {
+    if(MUSIC.el === a){ MUSIC.el = null; MUSIC.quelle = null; }
+    MUSIC.gap = wartezeit;
+  };
   a.addEventListener('ended', () => done(14 + Math.random()*22));   // Stille zwischen den Stücken
   a.addEventListener('error', () => done(20));
+
+  /* Android regelt die Lautstärke am Gerät, nicht am Element: audio.volume
+     bleibt dort wirkungslos. Der Ton läuft deshalb über die Tonleitung, dort
+     lässt er sich zuverlässig ein- und ausblenden. */
+  if(SND.ctx){
+    if(!MUSIC.gain){
+      MUSIC.gain = SND.ctx.createGain();
+      MUSIC.gain.gain.value = 0;
+      MUSIC.gain.connect(SND.master);
+    }
+    try {
+      MUSIC.quelle = SND.ctx.createMediaElementSource(a);
+      MUSIC.quelle.connect(MUSIC.gain);
+    } catch(e){ MUSIC.quelle = null; }
+  }
+
   const pr = a.play();
   if(pr && pr.catch) pr.catch(() => done(20));
   MUSIC.el = a;
   MUSIC.vol = 0;
+  setzeLautstaerke(0);
 }
+
+/* Lautstärke setzen — über die Tonleitung, wo vorhanden, sonst am Element. */
+function setzeLautstaerke(v){
+  if(MUSIC.gain && SND.ctx){
+    MUSIC.gain.gain.setTargetAtTime(v, SND.ctx.currentTime, 0.05);
+  }
+  if(MUSIC.el){
+    try { MUSIC.el.volume = clamp(v / Math.max(MUSIC.base, 0.001), 0, 1); } catch(e){}
+  }
+}
+
 function musicUpdate(dt, danger, ausblenden){
+  const aus = (!MUSIC.on || ausblenden || !SND.on);
   if(!MUSIC.el){
-    if(!MUSIC.on || ausblenden || !MUSIC.list.length) return;
+    if(aus || !MUSIC.list.length) return;
     MUSIC.gap -= dt;
     if(MUSIC.gap <= 0) musicNext();
     return;
   }
-  const ziel = (!MUSIC.on || ausblenden || !SND.on) ? 0 : MUSIC.base * (1 + danger*0.30);
-  MUSIC.vol += (ziel - MUSIC.vol) * Math.min(dt*(ziel > MUSIC.vol ? 0.55 : 1.2), 1);
-  MUSIC.el.volume = clamp(MUSIC.vol, 0, 1);
-  if(ziel === 0 && MUSIC.vol < 0.004){
-    MUSIC.el.pause();
-    MUSIC.el = null;
-    MUSIC.gap = 6;
+  const ziel = aus ? 0 : MUSIC.base * (1 + danger*0.30);
+  MUSIC.vol += (ziel - MUSIC.vol) * Math.min(dt * (aus ? 3.2 : 0.55), 1);
+  if(aus && MUSIC.vol < 0.02) MUSIC.vol = 0;
+  setzeLautstaerke(MUSIC.vol);
+  if(aus && MUSIC.vol <= 0){
+    // Nicht nur leise drehen: im Spiel soll das Stück wirklich stehen.
+    try { MUSIC.el.pause(); } catch(e){}
+    MUSIC.el = null; MUSIC.quelle = null;
+    MUSIC.gap = 1.2;
   }
 }
+
 function setMusic(on){
   MUSIC.on = on;
   localStorage.setItem('ft_music', on ? '1' : '0');
-  if(on && !MUSIC.el) MUSIC.gap = 0.5;
+  if(on){
+    if(!MUSIC.el) MUSIC.gap = 0.4;
+  } else {
+    musicUpdate(1.0, 0, true);      // sofort ausblenden und anhalten
+  }
 }
 
 function setSound(on){
@@ -5910,7 +5990,9 @@ function deathStep(dt){
   S.endT += dt;
   // Die Kamera dreht sich zu dem, was sie erwischt hat
   const dx = MON.pos.x - S.pos.x, dz = MON.pos.z - S.pos.z;
-  const want = Math.atan2(-dx, -dz) + Math.PI;
+  // Blickrichtung zur Gestalt: für die Kamera gilt atan2(-dx,-dz).
+  // Mit dem früheren +PI drehte sie sich im Moment des Todes von ihr weg.
+  const want = Math.atan2(-dx, -dz);
   let d = want - S.yaw;
   while(d >  Math.PI) d -= Math.PI*2;
   while(d < -Math.PI) d += Math.PI*2;
