@@ -1,0 +1,57 @@
+name: APK bauen
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'foundtape/**'
+      - 'android/**'
+      - '.github/workflows/build-apk.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    name: Found Tape als APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Quellcode holen
+        uses: actions/checkout@v4
+
+      - name: Java 17 einrichten
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android SDK einrichten
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
+
+      - name: Spiel in die App kopieren
+        run: |
+          rm -rf android/app/src/main/assets/www
+          mkdir -p android/app/src/main/assets/www
+          cp -r foundtape/. android/app/src/main/assets/www/
+          # Der Service Worker wird in der App nicht gebraucht, alles liegt lokal.
+          rm -f android/app/src/main/assets/www/sw.js
+          ls -R android/app/src/main/assets/www | head -40
+
+      - name: Gradle einrichten
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: APK bauen
+        run: gradle -p android assembleDebug --no-daemon --stacktrace
+
+      - name: APK hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: foundtape-apk
+          path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 30

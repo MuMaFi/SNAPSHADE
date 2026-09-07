@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>FOUND TAPE — SUBLEVEL 0</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>
+  :root{ --amber:#c8b26a; --paper:#d8d0b0; --safe-b: env(safe-area-inset-bottom, 0px); }
+  *{ -webkit-tap-highlight-color:transparent; box-sizing:border-box; }
+  html,body{
+    margin:0; padding:0; height:100%; width:100%; overflow:hidden; background:#000;
+    color:var(--paper); font-family:"Courier New",Courier,monospace;
+    touch-action:none; user-select:none; -webkit-user-select:none;
+    overscroll-behavior:none;
+  }
+  canvas{ display:block; width:100%; height:100%; }
+  #stage{ position:fixed; inset:0; background:#000; }
+
+  /* ---------- Touch-Steuerung ---------- */
+  #hud{ position:fixed; inset:0; z-index:4; pointer-events:none; }
+  #zoneMove,#zoneLook{ position:absolute; top:0; bottom:0; pointer-events:auto; }
+  #zoneMove{ left:0; width:45%; }
+  #zoneLook{ right:0; width:55%; }
+  #stick{
+    position:absolute; width:132px; height:132px; margin:-66px 0 0 -66px;
+    border:1px solid rgba(200,178,106,.30); border-radius:50%;
+    background:radial-gradient(circle,rgba(200,178,106,.06),transparent 70%);
+    opacity:0; transition:opacity .16s; pointer-events:none;
+  }
+  #stick.on{ opacity:1; }
+  #knob{
+    position:absolute; left:50%; top:50%; width:56px; height:56px; margin:-28px 0 0 -28px;
+    border:1px solid rgba(216,208,176,.5); border-radius:50%; background:rgba(216,208,176,.10);
+  }
+  .btn{
+    position:absolute; pointer-events:auto; border:1px solid rgba(200,178,106,.34);
+    border-radius:50%; background:rgba(10,9,6,.34); color:var(--amber);
+    font-family:inherit; font-size:11px; letter-spacing:.10em; text-align:center;
+    display:flex; align-items:center; justify-content:center; backdrop-filter:blur(2px);
+  }
+  .btn:active,.btn.held{ background:rgba(200,178,106,.22); color:#f4e6b4; }
+  #bRun{ right:22px; bottom:calc(30px + var(--safe-b)); width:92px; height:92px; font-size:12px; }
+  #bNv { right:126px; bottom:calc(46px + var(--safe-b)); width:66px; height:66px; }
+  #bNv.act{ border-color:#6fce7a; color:#8ee89a; }
+  #bUse{
+    right:22px; bottom:calc(140px + var(--safe-b)); width:92px; height:60px; border-radius:8px;
+    font-size:11px; display:none; border-color:rgba(240,222,160,.6); color:#f0dea0;
+  }
+  #bUse.on{ display:flex; animation:pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse{ 50%{ border-color:rgba(240,222,160,.22); } }
+  #bMenu{
+    right:12px; top:calc(10px + env(safe-area-inset-top,0px)); width:40px; height:40px;
+    border-radius:6px; font-size:15px; letter-spacing:0;
+  }
+
+  /* ---------- Meldungen ---------- */
+  #toast{
+    position:fixed; left:50%; top:24%; transform:translateX(-50%); z-index:5;
+    font-size:13px; letter-spacing:.24em; color:#efe4bd; text-shadow:0 0 12px rgba(0,0,0,.9);
+    opacity:0; transition:opacity .45s; text-align:center; pointer-events:none; white-space:pre-line;
+    padding:0 18px; line-height:1.9;
+  }
+  #toast.on{ opacity:.95; }
+
+  /* ---------- Overlays ---------- */
+  .screen{
+    position:fixed; inset:0; z-index:9; background:#000; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:16px; text-align:center;
+    padding:calc(24px + env(safe-area-inset-top,0px)) 22px calc(24px + var(--safe-b));
+    overflow-y:auto;
+  }
+  .screen h1{
+    font-size:clamp(15px,4.6vw,22px); letter-spacing:.5em; font-weight:400; margin:0 0 0 .5em;
+    opacity:.82;
+  }
+  .screen p{ font-size:12px; letter-spacing:.16em; opacity:.5; margin:0; line-height:2.1; max-width:34em; }
+  .rec{ width:9px; height:9px; border-radius:50%; background:#c33; animation:bl 1.1s steps(1) infinite; }
+  @keyframes bl{ 50%{ opacity:0; } }
+  .rule{ width:min(320px,72vw); height:1px; background:linear-gradient(90deg,transparent,#5a4b28,transparent); }
+  button.big{
+    background:none; border:1px solid #5a4b28; color:var(--amber); padding:14px 24px;
+    font-family:inherit; font-size:12px; letter-spacing:.24em; cursor:pointer; border-radius:2px;
+    min-width:230px;
+  }
+  button.big:active{ border-color:#a08a3c; color:#f0dfa0; background:rgba(200,178,106,.08); }
+  .row{ display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
+  .chip{
+    background:none; border:1px solid #3a3222; color:#8a8064; padding:9px 14px;
+    font-family:inherit; font-size:11px; letter-spacing:.18em; cursor:pointer; border-radius:2px;
+  }
+  .chip.sel{ border-color:#a08a3c; color:#e8d49a; }
+  #photo{
+    width:min(300px,68vw); border:1px solid #24201a; filter:sepia(.35) contrast(1.06) brightness(.62);
+    image-rendering:auto;
+  }
+  #hint{ font-size:10.5px; opacity:.34; letter-spacing:.14em; }
+  #loadbar{ width:min(300px,68vw); height:2px; background:#1a170f; }
+  #loadfill{ height:100%; width:0%; background:#7a6a34; transition:width .3s; }
+  #endStats{ font-size:11px; letter-spacing:.2em; opacity:.55; line-height:2.2; }
+  .hidden{ display:none !important; }
+
+  /* Startbildschirm: im Querformat nebeneinander, im Hochformat untereinander */
+  #scStart{ flex-direction:row; gap:clamp(14px,4vw,40px); flex-wrap:wrap; align-content:center; }
+  #scStart .col{ display:flex; flex-direction:column; align-items:center; gap:14px; }
+  .sub{ letter-spacing:.3em; opacity:.42; font-size:11px; }
+  @media (max-aspect-ratio: 1/1){
+    #scStart{ flex-direction:column; gap:14px; }
+    #photo{ width:min(300px,64vw); }
+  }
+  @media (max-height: 520px){
+    #photo{ width:min(240px,30vw); }
+    .screen h1{ font-size:16px; }
+    .screen p{ font-size:11px; line-height:1.8; }
+    #hint{ font-size:9.5px; }
+    button.big{ padding:11px 20px; min-width:200px; }
+    #scStart .col{ gap:9px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="stage"><canvas id="c"></canvas></div>
+
+<!-- ======== HUD / Touch ======== -->
+<div id="hud" class="hidden">
+  <div id="zoneMove"><div id="stick"><div id="knob"></div></div></div>
+  <div id="zoneLook"></div>
+  <button class="btn" id="bMenu">II</button>
+  <button class="btn" id="bRun">RENNEN</button>
+  <button class="btn" id="bNv">NV</button>
+  <button class="btn" id="bUse">AUFHEBEN</button>
+</div>
+<div id="toast"></div>
+
+<!-- ======== Startbildschirm ======== -->
+<div class="screen" id="scStart">
+  <div class="col">
+    <img id="photo" src="assets/photo.jpg" alt="Standbild vom Band">
+    <p class="sub">SUBLEVEL 0 &nbsp;·&nbsp; LOST FOOTAGE</p>
+  </div>
+  <div class="col">
+    <div class="rec"></div>
+    <h1>FOUND TAPE</h1>
+    <div class="rule"></div>
+    <p id="brief">
+      Du bist mit einem Camcorder in Sublevel 0 aufgewacht.<br>
+      Finde die <b id="tapeGoal">6</b> Bänder, dann den Ausgang.<br>
+      Etwas läuft hier unten mit dir mit.
+    </p>
+    <div class="row">
+      <button class="chip" data-q="low">NIEDRIG</button>
+      <button class="chip sel" data-q="mid">MITTEL</button>
+      <button class="chip" data-q="high">HOCH</button>
+    </div>
+    <div id="loadbar"><div id="loadfill"></div></div>
+    <button class="big" id="bStart" disabled>BAND WIRD GELESEN …</button>
+    <p id="hint">
+      links ziehen = laufen &nbsp;·&nbsp; rechts ziehen = umsehen<br>
+      RENNEN halten &nbsp;·&nbsp; NV = Nachtsicht (Akku)<br>
+      Tastatur: WASD · Maus · Shift · F · E
+    </p>
+  </div>
+</div>
+
+<!-- ======== Pause ======== -->
+<div class="screen hidden" id="scPause">
+  <h1 style="font-size:14px">PAUSE</h1>
+  <div class="rule"></div>
+  <p id="pauseStats"></p>
+  <button class="big" id="bResume">WEITER</button>
+  <button class="chip" id="bNewSeed">NEUES BAND</button>
+  <button class="chip" id="bQuit">ABBRECHEN</button>
+</div>
+
+<!-- ======== Ende ======== -->
+<div class="screen hidden" id="scEnd">
+  <h1 id="endTitle">END OF TAPE</h1>
+  <div class="rule"></div>
+  <p id="endText"></p>
+  <p id="endStats"></p>
+  <button class="big" id="bAgain">NOCHMAL ABSPIELEN</button>
+  <button class="chip" id="bAgainSeed">NEUES BAND</button>
+</div>
+
+<script src="lib/three.min.js"></script>
+<script src="lib/GLTFLoader.js"></script>
+<script src="game.js"></script>
+<script>
+  // Im Browser sorgt der Service Worker fürs Offline-Spielen.
+  // In der APK liegt ohnehin alles lokal, dort fehlt die Datei und der Fehler wird verschluckt.
+  if('serviceWorker' in navigator && location.protocol.startsWith('http')){
+    addEventListener('load', () => {
+      fetch('sw.js', { method:'HEAD' })
+        .then(r => { if(r.ok) navigator.serviceWorker.register('sw.js'); })
+        .catch(()=>{});
+    });
+  }
+</script>
+</body>
+</html>
