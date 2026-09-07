@@ -35,8 +35,10 @@ jobs:
       - name: Seite zusammenstellen
         run: |
           mkdir -p _site
-          # Snapshade bleibt auf der Startseite, wie bisher
-          cp -f index.html manifest.json _site/ 2>/dev/null || true
+          # Startseite ist jetzt das Spiel selbst (eine einzelne Datei)
+          cp -f index.html _site/ 2>/dev/null || true
+          # Snapshade bleibt unter /snapshade.html erreichbar
+          cp -f snapshade.html manifest.json _site/ 2>/dev/null || true
           [ -d icons ] && cp -r icons _site/ || true
           # Das Spiel liegt unter /foundtape/
           mkdir -p _site/foundtape

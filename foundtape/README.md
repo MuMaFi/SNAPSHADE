@@ -12,6 +12,11 @@ Der Ablauf: Vorspann → Titelbild → Schwierigkeit → Auftrag → Band läuft
 
 ## Eine einzelne Datei zum Weitergeben
 
+Dieselbe Datei liegt zweimal: als `index.html` im Wurzelverzeichnis (damit das
+Projekt beim Öffnen direkt das Spiel startet) und als `dist/foundtape.html` zum
+Verschicken. Das frühere Snapshade von der Startseite liegt jetzt unter
+`snapshade.html`.
+
 `dist/foundtape.html` enthält alles — Spiel, three.js, Texturen, Modell, Foto und
 Musik. Doppelklick genügt, kein Server, kein Netz. Neu gebaut wird sie mit
 

@@ -14,6 +14,7 @@ import base64, json, re, sys, pathlib
 WURZEL = pathlib.Path(__file__).resolve().parent.parent
 QUELLE = WURZEL / 'foundtape'
 ZIEL   = WURZEL / 'dist' / 'foundtape.html'
+ZIEL2  = WURZEL / 'index.html'        # dieselbe Datei als Startseite des Projekts
 
 TYPEN = {'.jpg':'image/jpeg', '.png':'image/png', '.glb':'model/gltf-binary',
          '.mp3':'audio/mpeg', '.json':'application/json'}
@@ -71,8 +72,11 @@ def main():
 
     ZIEL.parent.mkdir(parents=True, exist_ok=True)
     ZIEL.write_text(html, encoding='utf-8')
+    # Dieselbe Datei liegt als index.html im Wurzelverzeichnis, damit das Spiel
+    # beim Öffnen des Projekts (und auf GitHub Pages) direkt startet.
+    ZIEL2.write_text(html, encoding='utf-8')
     mb = ZIEL.stat().st_size / 1024 / 1024
-    print('geschrieben:', ZIEL.relative_to(WURZEL), '(%.1f MB)' % mb)
+    print('geschrieben:', ZIEL.relative_to(WURZEL), 'und', ZIEL2.relative_to(WURZEL), '(%.1f MB)' % mb)
     print('eingebettet:', len(assets), 'Dateien' + (' — ohne Musik' if ohne_musik else ''))
 
 if __name__ == '__main__':
