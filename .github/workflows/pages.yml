@@ -1,0 +1,63 @@
+name: Auf GitHub Pages veröffentlichen
+
+# Der Weg ohne jede Warnung: Das Spiel liegt als Webseite bereit, das Handy
+# installiert es über "Zum Startbildschirm hinzufügen" als App. Kein APK, keine
+# Rückfrage von Play Protect.
+#
+# Einmalig einzurichten: Repo -> Settings -> Pages -> Source: "GitHub Actions".
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'foundtape/**'
+      - 'index.html'
+      - 'manifest.json'
+      - '.github/workflows/pages.yml'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  bauen:
+    name: Seite zusammenstellen
+    runs-on: ubuntu-latest
+    steps:
+      - name: Quellcode holen
+        uses: actions/checkout@v4
+
+      - name: Seite zusammenstellen
+        run: |
+          mkdir -p _site
+          # Snapshade bleibt auf der Startseite, wie bisher
+          cp -f index.html manifest.json _site/ 2>/dev/null || true
+          [ -d icons ] && cp -r icons _site/ || true
+          # Das Spiel liegt unter /foundtape/
+          mkdir -p _site/foundtape
+          cp -r foundtape/. _site/foundtape/
+          # Die Einzeldatei zum Weitergeben, falls gebaut
+          [ -f dist/foundtape.html ] && cp dist/foundtape.html _site/foundtape-einzeldatei.html || true
+          ls -R _site | head -40
+
+      - name: Als Pages-Artefakt hochladen
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  veroeffentlichen:
+    name: Veröffentlichen
+    needs: bauen
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.pages.outputs.page_url }}
+    steps:
+      - name: Auf Pages ausrollen
+        id: pages
+        uses: actions/deploy-pages@v4

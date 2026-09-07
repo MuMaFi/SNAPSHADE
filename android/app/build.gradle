@@ -24,6 +24,12 @@ android {
       storePassword System.getenv('FT_KEYSTORE_PASSWORD')  ?: 'foundtape'
       keyAlias      System.getenv('FT_KEY_ALIAS')          ?: 'foundtape'
       keyPassword   System.getenv('FT_KEY_PASSWORD')       ?: 'foundtape'
+      // Alle Signaturverfahren mitgeben: ältere Android-Fassungen prüfen v1/v2,
+      // neuere v3, und v4 erlaubt die schnelle Installation über adb.
+      enableV1Signing = true
+      enableV2Signing = true
+      enableV3Signing = true
+      enableV4Signing = true
     }
   }
 

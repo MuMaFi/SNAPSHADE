@@ -147,23 +147,42 @@ Die App braucht **keine Internet-Berechtigung** — sie liefert das Spiel aus ih
 eigenen Assets über einen lokalen `https`-Ursprung aus (`WebViewAssetLoader`),
 damit WebGL, Fetch und Texturen ohne Sonderrechte laufen.
 
-### Warum das Handy trotzdem einmal nachfragt
+### Play Protect blockiert die Installation — was dahintersteckt
 
-Gebaut wird eine **Release-Fassung mit eigenem Schlüssel** (`android/keystore/`),
-nicht mehr die debug-signierte Variante: die App ist damit nicht debuggbar, behält
-über alle Fassungen dieselbe Signatur (Updates lassen sich drüberinstallieren) und
-fordert keine einzige Berechtigung an. Das ist genau das, was Android als
-vertrauenswürdig bewertet.
+Beim Installieren meldet Google Play Protect:
+*„App wurde zum Schutz deines Geräts blockiert — Play Protect kennt von diesem
+Entwickler noch keine anderen Apps."*
 
-Was bleibt: Beim ersten Mal fragt Android, ob dieser Quelle (z. B. dem Browser)
-das Installieren erlaubt sein soll, und Play Protect meldet einmalig, dass die App
-nicht über Google Play kam. Beides lässt sich von außen nicht abschalten — dafür
-müsste die App im Play Store liegen. Die Warnung „schädliche App blockiert" sollte
-nicht mehr erscheinen.
+Das ist **kein Fund**, sondern eine Ruf-Prüfung: Play Protect kennt den
+Signaturschlüssel nicht, weil damit noch nie eine App über Google Play verteilt
+wurde. Am APK selbst lässt sich das nicht abschalten — kein Manifest-Eintrag, kein
+Signaturverfahren und keine Einstellung ändert daran etwas. Weg wäre die Meldung
+erst, wenn die App aus dem Play Store käme (Entwicklerkonto, einmalig 25 US-Dollar,
+Prüfverfahren) oder wenn dieser Schlüssel über längere Zeit Installationen ohne
+Auffälligkeiten gesammelt hätte.
 
-Der Schlüssel liegt im Repo, damit der Bau ohne Einrichtung funktioniert. Wer das
-nicht will, hinterlegt einen eigenen und setzt beim Bau die Variablen
-`FT_KEYSTORE`, `FT_KEYSTORE_PASSWORD`, `FT_KEY_ALIAS` und `FT_KEY_PASSWORD`.
+Was die App dafür tut, was sie kann: sie ist release-signiert (v1 bis v4), nicht
+debuggbar, fordert **keine einzige Berechtigung** an und hat keinen Netzzugriff.
+
+**Drei Wege, damit umzugehen:**
+
+1. **Trotzdem installieren** (10 Sekunden) — im Dialog auf *Weitere Details* tippen,
+   dann *Trotzdem installieren*. Danach läuft die App normal.
+2. **Als Webseite auf den Startbildschirm** — der Weg ganz ohne Warnung, siehe unten.
+3. **Über den Rechner mit `adb install app-release.apk`** — dabei fragt Play Protect
+   nicht.
+
+### Ganz ohne Warnung: über GitHub Pages installieren
+
+Der Workflow [`pages.yml`](../.github/workflows/pages.yml) legt das Spiel als
+Webseite ab. Einmalig einzurichten: **Settings → Pages → Source: „GitHub Actions"**,
+danach unter **Actions → „Auf GitHub Pages veröffentlichen" → Run workflow** starten.
+
+Danach liegt es unter `https://mumafi.github.io/SNAPSHADE/foundtape/`. Auf dem Handy
+im Browser öffnen, Menü → **Zum Startbildschirm hinzufügen**. Es bekommt ein eigenes
+Symbol, startet im Vollbild ohne Browserleiste und läuft dank Offline-Cache auch
+ohne Netz — praktisch dasselbe wie die APK, nur dass Play Protect gar nicht erst
+gefragt wird.
 
 ## Aufbau
 
