@@ -1,0 +1,6 @@
+{
+  "_hinweis": "Weitere Stücke: MP3 in diesen Ordner legen und hier eintragen. Reihenfolge = Abspielreihenfolge, sie wird beim Start gemischt.",
+  "tracks": [
+    { "file": "handprint.mp3", "titel": "Handprint", "von": "Kane Parsons, Edo Van Breemen" }
+  ]
+}

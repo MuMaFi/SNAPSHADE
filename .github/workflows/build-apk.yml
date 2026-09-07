@@ -1,0 +1,75 @@
+name: APK bauen
+
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: 'APK zusätzlich als Release veröffentlichen (dann lädt sie das Handy direkt herunter)'
+        type: boolean
+        default: false
+  push:
+    paths:
+      - 'foundtape/**'
+      - 'android/**'
+      - '.github/workflows/build-apk.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    name: Found Tape als APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Quellcode holen
+        uses: actions/checkout@v4
+
+      - name: Java 17 einrichten
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android SDK einrichten
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
+
+      - name: Spiel in die App kopieren
+        run: |
+          rm -rf android/app/src/main/assets/www
+          mkdir -p android/app/src/main/assets/www
+          cp -r foundtape/. android/app/src/main/assets/www/
+          # Der Service Worker wird in der App nicht gebraucht, alles liegt lokal.
+          rm -f android/app/src/main/assets/www/sw.js
+          ls -R android/app/src/main/assets/www | head -40
+
+      - name: Gradle einrichten
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: APK bauen
+        run: gradle -p android assembleRelease --no-daemon --stacktrace
+
+      - name: APK hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: foundtape-apk
+          path: android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: APK als Release veröffentlichen
+        if: github.event_name == 'workflow_dispatch' && inputs.release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete apk-latest --yes --cleanup-tag || true
+          gh release create apk-latest \
+            android/app/build/outputs/apk/release/*.apk \
+            --title "Found Tape — aktuelle APK" \
+            --notes "Signierte Release-APK aus $GITHUB_SHA. Auf dem Handy herunterladen und antippen; beim ersten Mal muss die Installation aus dieser Quelle einmalig erlaubt werden." \
+            --prerelease \
+            --target "$GITHUB_SHA"
