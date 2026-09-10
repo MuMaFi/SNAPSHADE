@@ -1613,6 +1613,9 @@ function setSound(on){
 /* ======================= 11  Steuerung ======================= */
 
 const IN = { mx:0, mz:0, dyaw:0, dpitch:0, run:false, nv:false, use:false };
+/* Empfindlichkeit des Umsehens. Wird über alle Bänder hinweg gemerkt und
+   im Pausenbild eingestellt. */
+let EMPF = clamp(parseFloat(localStorage.getItem('ft_empf')) || 1, 0.3, 2.5);
 const KEY = {};
 
 const elHud   = $('hud');
@@ -1665,8 +1668,8 @@ zLook.addEventListener('pointerdown', e => {
 });
 zLook.addEventListener('pointermove', e => {
   if(e.pointerId !== lookId) return;
-  IN.dyaw   -= (e.clientX - lookLx) * 0.0042;
-  IN.dpitch -= (e.clientY - lookLy) * 0.0034;
+  IN.dyaw   -= (e.clientX - lookLx) * 0.0042 * EMPF;
+  IN.dpitch -= (e.clientY - lookLy) * 0.0034 * EMPF;
   lookLx = e.clientX; lookLy = e.clientY;
   e.preventDefault();
 });
@@ -1734,8 +1737,8 @@ canvas.addEventListener('click', () => {
 });
 addEventListener('mousemove', e => {
   if(document.pointerLockElement !== canvas) return;
-  IN.dyaw   -= e.movementX * 0.0022;
-  IN.dpitch -= e.movementY * 0.0020;
+  IN.dyaw   -= e.movementX * 0.0022 * EMPF;
+  IN.dpitch -= e.movementY * 0.0020 * EMPF;
 });
 
 function toggleNv(){
@@ -2414,3 +2417,33 @@ setInterval(() => {
 
 drawHud();
 frame();
+
+/* ---------- Empfindlichkeit des Umsehens ----------
+   Ein Regler im Pausenbild, über alle Bänder hinweg gemerkt. */
+{
+  const regler = $('empfRegler'), wert = $('empfWert');
+  if(regler){
+    const zeigen = () => { if(wert) wert.textContent = EMPF.toFixed(1).replace('.', ',') + '×'; };
+    regler.value = Math.round(EMPF * 100);
+    zeigen();
+    regler.addEventListener('input', () => {
+      EMPF = clamp(regler.value / 100, 0.3, 2.5);
+      localStorage.setItem('ft_empf', String(EMPF));
+      zeigen();
+    });
+    for(const art of ['pointerdown','pointermove','pointerup'])
+      regler.addEventListener(art, e => e.stopPropagation());
+  }
+}
+
+/* Prüfhaken für die Messung von außen — dieselbe Handhabe wie in den
+   anderen Bändern, damit sich alle drei gleich testen lassen. */
+window.FT = {
+  stand(){ return { x:+S.pos.x.toFixed(2), z:+S.pos.z.toFixed(2), phase:S.phase,
+    gier:+S.yaw.toFixed(3), gierZ:+S.yawT.toFixed(3),
+    schwung:+S.swing.toFixed(3), kipp:+S.tilt.toFixed(3),
+    akku:Math.round(S.battery), baender:S.tapes }; },
+  blick(g,n){ S.yaw=S.yawT=g; if(n!==undefined) S.pitch=S.pitchT=n; },
+  empf(){ return EMPF; },
+  S, IN,
+};

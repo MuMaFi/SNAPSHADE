@@ -35,14 +35,16 @@ jobs:
       - name: Seite zusammenstellen
         run: |
           mkdir -p _site
-          # Startseite ist jetzt das Spiel selbst (eine einzelne Datei)
-          cp -f index.html _site/ 2>/dev/null || true
           # Snapshade bleibt unter /snapshade.html erreichbar
           cp -f snapshade.html manifest.json _site/ 2>/dev/null || true
           [ -d icons ] && cp -r icons _site/ || true
-          # Das Spiel liegt unter /foundtape/
+          # Das Spiel liegt unter /foundtape/ …
           mkdir -p _site/foundtape
           cp -r foundtape/. _site/foundtape/
+          # … und noch einmal als Startseite. Die Einzeldatei taugt dafür
+          # nicht: in ihr steckt nur Ebene 0, die beiden anderen Bänder
+          # liegen als eigene Ordner daneben.
+          cp -r foundtape/. _site/
           # Die Einzeldatei zum Weitergeben, falls gebaut
           [ -f dist/foundtape.html ] && cp dist/foundtape.html _site/foundtape-einzeldatei.html || true
           ls -R _site | head -40

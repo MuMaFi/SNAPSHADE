@@ -304,17 +304,31 @@ scene.add(streiflicht); scene.add(streiflicht.target);
 const AUGEN = 1.66, KOPF = 1.74;
 const P = {
   x: 0, z: 0, y: 0, gier: 0, nick: -0.03,
+  gierZ: 0, nickZ: -0.03,           // wohin der Finger zeigt; die Kamera zieht nach
+  schwung: 0, kipp: 0,
   kraft: 1, schrittWeg: 0, bob: 0, tempo: 0,
   gelaufen: 0,
 };
 const TEMPO = { gehen: 2.55, rennen: 5.05 };
 
 const IN = { mx:0, mz:0, dyaw:0, dpitch:0, run:false };
+/* Empfindlichkeit des Umsehens. Wird über alle Bänder hinweg gemerkt und
+   im Pausenbild eingestellt. */
+let EMPF = clamp(parseFloat(localStorage.getItem('ft_empf')) || 1, 0.3, 2.5);
 const KEY = {};
 
 function spielerSchritt(dt){
-  P.gier += IN.dyaw; IN.dyaw = 0;
-  P.nick = clamp(P.nick + IN.dpitch, -1.25, 1.15); IN.dpitch = 0;
+  /* Der Finger bewegt das Ziel, die Kamera zieht weich nach und kippt beim
+     Schwenk leicht mit — dieselbe Handkamera wie im ersten Band. */
+  P.gierZ += IN.dyaw; IN.dyaw = 0;
+  P.nickZ = clamp(P.nickZ + IN.dpitch, -1.25, 1.15); IN.dpitch = 0;
+  const folge = 1 - Math.exp(-dt*11);
+  const dGier = (P.gierZ - P.gier) * folge;
+  P.gier += dGier;
+  P.nick += (P.nickZ - P.nick) * folge;
+  const schwenk = dGier / Math.max(dt, 0.0001);
+  P.schwung += (clamp(schwenk*0.030, -0.20, 0.20) - P.schwung) * Math.min(dt*5.0, 1);
+  P.kipp    += (clamp(schwenk*0.012, -0.09, 0.09) - P.kipp)    * Math.min(dt*3.5, 1);
 
   let vor = -IN.mz, quer = IN.mx;
   if(KEY.KeyW || KEY.ArrowUp)    vor += 1;
@@ -360,7 +374,7 @@ function spielerSchritt(dt){
     P.x + Math.sin(t*0.61)*0.012*stark,
     P.y + AUGEN + Math.sin(t*7.4)*P.bob + stoss + Math.sin(t*0.94+0.3)*0.014*stark,
     P.z + Math.sin(t*0.73+2.2)*0.012*stark);
-  camera.rotation.set(P.nick + wNick, P.gier + wGier, wRoll, 'YXZ');
+  camera.rotation.set(P.nick + wNick + P.kipp, P.gier + wGier, wRoll - P.schwung, 'YXZ');
 }
 
 /* ======================= 6  Der Mast ======================= */
@@ -900,6 +914,18 @@ function hudSchritt(dt){
   $('tc').textContent = bandStr(STAND.t);
   const dm = mastAbstand();
   $('restZeit').textContent = Math.round(dm) + ' m';
+
+  /* Wohin der Mast steht. Auf der Wiese sieht alles gleich aus; ohne
+     Richtungsangabe läuft man an ihm vorbei, ohne es zu merken.
+     Der Winkel ist bildbezogen: 0 heißt geradeaus.
+     Die Wiese ist eine Schleife, deshalb der kürzeste Weg über dW. */
+  const zg = $('mastZeiger');
+  if(MAST.gruppe && !MAST.erreicht && STAND.phase === 'spiel'){
+    const mx = dW(P.x, MAST.x), mz = dW(P.z, MAST.z);
+    const winkel = Math.atan2(mx, -mz) + P.gier;
+    $('mastNadel').style.transform = 'rotate(' + winkel.toFixed(3) + 'rad)';
+    zg.classList.add('an');
+  } else zg.classList.remove('an');
   $('band').classList.toggle('knapp', dm < 60);
   /* Selten — und dann lange genug, dass man es liest. Bei jedem Takt
      gewürfelt flackerte die Zahl fast jede Sekunde und sah nach einem
@@ -915,7 +941,7 @@ function hudSchritt(dt){
 
 function neuStart(){
   P.x = modW(Math.random()*WELT); P.z = modW(Math.random()*WELT);
-  P.y = hoeheBei(P.x, P.z); P.gier = Math.random()*Math.PI*2; P.nick = -0.03;
+  P.y = hoeheBei(P.x, P.z); P.gier = P.gierZ = Math.random()*Math.PI*2; P.nick = P.nickZ = -0.03; P.schwung = P.kipp = 0;
   P.kraft = 1; P.gelaufen = 0;
   STAND.t = 0; STAND.riss = 0;
   STAND.endT = 0; STAND.naechste = 999; STAND.rufT = 9; STAND.taeter = null;
@@ -972,7 +998,7 @@ function erwischt(g){
   STAND.phase = 'tot'; STAND.endT = 0; STAND.tode++;
   STAND.taeter = g;
   P.gier = Math.atan2(dW(P.x, g.x), dW(P.z, g.z));
-  P.nick = 0.42;                                   // der Blick geht hoch
+  P.nick = P.nickZ = 0.42;                                   // der Blick geht hoch
   schreckTon();
   if(navigator.vibrate) navigator.vibrate([0,90,50,240]);
   allesLos();
@@ -1028,8 +1054,8 @@ zLook.addEventListener('pointerdown', e => {
 });
 zLook.addEventListener('pointermove', e => {
   if(e.pointerId !== lookId) return;
-  IN.dyaw   -= (e.clientX-lookLx)*0.0042;
-  IN.dpitch -= (e.clientY-lookLy)*0.0034;
+  IN.dyaw   -= (e.clientX-lookLx)*0.0042*EMPF;
+  IN.dpitch -= (e.clientY-lookLy)*0.0034*EMPF;
   lookLx = e.clientX; lookLy = e.clientY; e.preventDefault();
 });
 function endLook(e){ if(e.pointerId === lookId) lookId = null; }
@@ -1069,8 +1095,8 @@ canvas.addEventListener('click', () => {
 });
 addEventListener('mousemove', e => {
   if(document.pointerLockElement !== canvas) return;
-  IN.dyaw   -= e.movementX*0.0022;
-  IN.dpitch -= e.movementY*0.0020;
+  IN.dyaw   -= e.movementX*0.0022*EMPF;
+  IN.dpitch -= e.movementY*0.0020*EMPF;
 });
 
 /* ======================= 12  Bild und Schleife ======================= */
@@ -1239,7 +1265,7 @@ window.WI = {
   hoehe:(x,z)=>hoeheBei(x,z),
   welt:WELT,
   setzSie(i,x,z){ const g=SIE[i]; if(!g) return; g.x=modW(x); g.z=modW(z); g.y=hoeheBei(g.x,g.z); },
-  blick(g,n){ P.gier=g; if(n!==undefined) P.nick=n; },
+  blick(g,n){ P.gier=P.gierZ=g; if(n!==undefined) P.nick=P.nickZ=n; },
   setz(x,z){ P.x=modW(x); P.z=modW(z); P.y=hoeheBei(P.x,P.z); },
   mehr(d){ return neueGestalt(d||100); },
   himmelFarbe: () => '#' + himmelMat.uniforms.uOben.value.getHexString(),
@@ -1248,3 +1274,23 @@ window.WI = {
 };
 
 bild();
+
+/* ---------- Empfindlichkeit des Umsehens ----------
+   Ein Regler im Pausenbild, über alle Bänder hinweg gemerkt. */
+{
+  const regler = document.getElementById('empfRegler');
+  const wert   = document.getElementById('empfWert');
+  if(regler){
+    const zeigen = () => { if(wert) wert.textContent = EMPF.toFixed(1).replace('.', ',') + '×'; };
+    regler.value = Math.round(EMPF * 100);
+    zeigen();
+    regler.addEventListener('input', () => {
+      EMPF = clamp(regler.value / 100, 0.3, 2.5);
+      localStorage.setItem('ft_empf', String(EMPF));
+      zeigen();
+    });
+    // Der Regler liegt im Pausenbild; ein Wisch darauf darf nicht umsehen
+    for(const art of ['pointerdown','pointermove','pointerup'])
+      regler.addEventListener(art, e => e.stopPropagation());
+  }
+}

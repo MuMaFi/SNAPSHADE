@@ -148,6 +148,21 @@ canvas{display:block; width:100%; height:100%; touch-action:none}
 #ladebalken{width:min(70vw,300px); height:3px; background:#ffffff1a; border-radius:2px; overflow:hidden}
 #ladefuell{height:100%; width:0; background:var(--wasser); transition:width .2s}
 #endStats{font-size:11px; letter-spacing:.14em; color:var(--blass); line-height:2}
+
+/* Empfindlichkeit des Umsehens — Wunsch aus dem Spieltest: manchen ist das
+   Wischen zu träge, anderen zu fahrig. */
+.empfBlock{display:flex; flex-direction:column; align-items:center; gap:7px; margin:2px 0}
+.empfBlock label{font-size:10px; letter-spacing:.22em; opacity:.6}
+.empfBlock b{font-weight:400; color:#e8d49a}
+#empfRegler{-webkit-appearance:none; appearance:none; width:min(260px,64vw); height:22px;
+  background:transparent; cursor:pointer}
+#empfRegler::-webkit-slider-runnable-track{height:3px; background:#3a3222; border-radius:2px}
+#empfRegler::-moz-range-track{height:3px; background:#3a3222; border-radius:2px}
+#empfRegler::-webkit-slider-thumb{-webkit-appearance:none; appearance:none;
+  width:20px; height:20px; margin-top:-9px; border-radius:50%;
+  background:#0c0b08; border:1px solid #a08a3c}
+#empfRegler::-moz-range-thumb{width:20px; height:20px; border-radius:50%;
+  background:#0c0b08; border:1px solid #a08a3c}
 </style>
 </head>
 <body>
@@ -227,6 +242,10 @@ canvas{display:block; width:100%; height:100%; touch-action:none}
 
 <div class="screen hidden" id="scPause">
   <h1><small>BAND ANGEHALTEN</small>PAUSE</h1>
+  <div class="empfBlock">
+    <label for="empfRegler">EMPFINDLICHKEIT <b id="empfWert">1.0×</b></label>
+    <input type="range" id="empfRegler" min="30" max="250" step="5" value="100">
+  </div>
   <button class="big" id="bWeiter">WEITER</button>
   <div class="row">
     <button class="chip" id="bTon">TON: AN</button>

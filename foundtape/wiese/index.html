@@ -38,6 +38,20 @@ canvas{display:block; width:100%; height:100%; touch-action:none}
 #anzahl{display:inline-block; margin-top:3px; font-size:10px; letter-spacing:.16em; color:#e0a63c}
 #band.knapp b{color:var(--warn)}
 
+/* Der Mast steht irgendwo hinter dem Gras. Ohne Hinweis dreht man sich
+   im Kreis, deshalb ein Zeiger oben in der Mitte. */
+#mastZeiger{position:absolute; left:50%; transform:translateX(-50%);
+  top:calc(10px + env(safe-area-inset-top,0px)); width:56px; height:56px;
+  display:none; pointer-events:none}
+#mastZeiger.an{display:block}
+#mastNadel{position:absolute; inset:0; display:flex; align-items:flex-start;
+  justify-content:center; transition:transform .09s linear}
+#mastNadel::before{content:''; width:0; height:0;
+  border-left:9px solid transparent; border-right:9px solid transparent;
+  border-bottom:17px solid #e8813c; filter:drop-shadow(0 0 5px #e8813c66)}
+#mastZeiger small{position:absolute; left:0; right:0; bottom:2px; text-align:center;
+  font-size:9px; letter-spacing:.2em; color:#e8a86c; opacity:.75}
+
 #toast{position:absolute; left:50%; transform:translateX(-50%);
   bottom:calc(150px + env(safe-area-inset-bottom,0px)); max-width:min(84vw,520px);
   text-align:center; font-size:12px; line-height:1.55; letter-spacing:.05em;
@@ -98,6 +112,21 @@ canvas{display:block; width:100%; height:100%; touch-action:none}
 #endStats{font-size:11px; letter-spacing:.14em; color:#e2ecdd; line-height:2}
 #herkunft{font-size:9px; letter-spacing:.1em; color:#e8f0e4; opacity:.7; max-width:40ch; line-height:1.7}
 #herkunft a{color:inherit}
+
+/* Empfindlichkeit des Umsehens — Wunsch aus dem Spieltest: manchen ist das
+   Wischen zu träge, anderen zu fahrig. */
+.empfBlock{display:flex; flex-direction:column; align-items:center; gap:7px; margin:2px 0}
+.empfBlock label{font-size:10px; letter-spacing:.22em; opacity:.6}
+.empfBlock b{font-weight:400; color:#e8d49a}
+#empfRegler{-webkit-appearance:none; appearance:none; width:min(260px,64vw); height:22px;
+  background:transparent; cursor:pointer}
+#empfRegler::-webkit-slider-runnable-track{height:3px; background:#3a3222; border-radius:2px}
+#empfRegler::-moz-range-track{height:3px; background:#3a3222; border-radius:2px}
+#empfRegler::-webkit-slider-thumb{-webkit-appearance:none; appearance:none;
+  width:20px; height:20px; margin-top:-9px; border-radius:50%;
+  background:#0c0b08; border:1px solid #a08a3c}
+#empfRegler::-moz-range-thumb{width:20px; height:20px; border-radius:50%;
+  background:#0c0b08; border:1px solid #a08a3c}
 </style>
 </head>
 <body>
@@ -107,6 +136,7 @@ canvas{display:block; width:100%; height:100%; touch-action:none}
 <div id="hud">
   <div class="tc"><span class="rec"></span><span id="tc">00:00:00</span></div>
   <div id="band"><b id="restZeit">230 m</b>ZUM MAST<br><span id="anzahl">4 GESTALTEN</span></div>
+  <div id="mastZeiger"><div id="mastNadel"></div><small>MAST</small></div>
   <div id="fadenkreuz"></div>
   <div id="toast"></div>
 </div>
@@ -159,6 +189,10 @@ canvas{display:block; width:100%; height:100%; touch-action:none}
 
 <div class="screen hidden" id="scPause">
   <h1><small>BAND ANGEHALTEN</small>PAUSE</h1>
+  <div class="empfBlock">
+    <label for="empfRegler">EMPFINDLICHKEIT <b id="empfWert">1.0×</b></label>
+    <input type="range" id="empfRegler" min="30" max="250" step="5" value="100">
+  </div>
   <button class="big" id="bWeiter">WEITER</button>
   <div class="row">
     <button class="chip" id="bTon">TON: AN</button>
