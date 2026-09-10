@@ -56,7 +56,9 @@ def main():
     html = re.sub(r'<script>\s*//[^\n]*Service Worker.*?</script>', '', html, flags=re.S)
     html = re.sub(r"<script>\s*if\('serviceWorker' in navigator.*?</script>", '', html, flags=re.S)
 
-    tabelle = ('<script>window.FT_ASSETS = ' +
+    # Ebene 1 liegt als eigener Ordner vor und lässt sich nicht einbetten;
+    # in der Einzeldatei bleibt sie deshalb zu.
+    tabelle = ('<script>window.FT_EINZELDATEI = true; window.FT_ASSETS = ' +
                json.dumps(assets, ensure_ascii=False, separators=(',', ':')) + ';</script>')
 
     html = html.replace('<script src="lib/three.min.js"></script>',

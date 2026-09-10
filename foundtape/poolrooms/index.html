@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#06171c">
+<title>Found Tape · Ebene 1: Poolrooms — AGG Games</title>
+<meta name="description" content="Die geflutete Badeanstalt. Drei Schieber öffnen, das Wasser steigen lassen, hoch zur Luke — und etwas schwimmt mit.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%2306171c'/%3E%3Cpath d='M0 9c2-1.4 3-1.4 4 0s3 1.4 4 0 3-1.4 4 0 3 1.4 4 0v7H0z' fill='%233fb8ae'/%3E%3C/svg%3E">
+<style>
+:root{
+  --tief:#06171c; --becken:#0d2b33; --kachel:#dfe6e2; --fuge:#9aa8a4;
+  --wasser:#3fb8ae; --wasser-hell:#8fe4dc; --warn:#e8813c; --rot:#c8443a;
+  --tinte:#e9f2f0; --dim:#8ea5a3; --blass:#5b7473;
+  --ui: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent}
+html,body{height:100%; overflow:hidden; overscroll-behavior:none; touch-action:none;
+  -webkit-user-select:none; user-select:none}
+body{background:#000; color:var(--tinte); font-family:var(--ui)}
+canvas{display:block; width:100%; height:100%; touch-action:none}
+#buehne{position:fixed; inset:0; background:#000}
+
+/* ---------------- Bandkorn über allem: das hier ist immer noch eine Kassette --- */
+#band{position:fixed; inset:0; z-index:6; pointer-events:none; opacity:.5;
+  background:
+    repeating-linear-gradient(to bottom, #0000 0 2px, #0000000f 2px 4px),
+    radial-gradient(120% 90% at 50% 50%, #0000 52%, #000000b8 100%);
+  mix-blend-mode:multiply}
+
+/* ---------------- Anzeige ---------------- */
+#hud{position:fixed; inset:0; z-index:8; pointer-events:none; display:none}
+#hud.an{display:block}
+.tc{position:absolute; left:calc(10px + env(safe-area-inset-left,0px));
+  top:calc(9px + env(safe-area-inset-top,0px)); font-size:12px; letter-spacing:.14em;
+  color:#dfeae8; text-shadow:1px 0 0 #c8443a66, -1px 0 0 #3fb8ae66}
+.tc .rec{display:inline-block; width:8px; height:8px; border-radius:50%;
+  background:var(--rot); margin-right:7px; vertical-align:1px; animation:blink 1.6s steps(2) infinite}
+@keyframes blink{0%,55%{opacity:1}56%,100%{opacity:.15}}
+
+/* Auftrag oben rechts */
+#auftrag{position:absolute; right:calc(10px + env(safe-area-inset-right,0px));
+  top:calc(9px + env(safe-area-inset-top,0px)); text-align:right; font-size:11px;
+  letter-spacing:.12em; color:var(--dim)}
+#auftrag b{display:block; font-size:17px; letter-spacing:.06em; color:var(--wasser-hell);
+  font-variant-numeric:tabular-nums}
+
+/* Wasserstandssäule links */
+#pegel{position:absolute; left:calc(12px + env(safe-area-inset-left,0px)); top:50%;
+  transform:translateY(-50%); width:52px; height:min(46vh,240px)}
+#saeule{position:absolute; left:14px; top:0; bottom:0; width:15px;
+  border:1px solid #ffffff2e; border-radius:3px; background:#00000059; overflow:hidden}
+#fuell{position:absolute; left:0; right:0; bottom:0;
+  background:linear-gradient(to top, #2b8f88, var(--wasser)); transition:height .18s linear}
+.marke{position:absolute; left:6px; right:-30px; height:0; border-top:1px dashed #ffffff40}
+.marke span{position:absolute; right:0; top:-12px; font-size:8px; letter-spacing:.1em; color:#ffffff70}
+.marke.ziel{border-top-color:var(--warn)}
+.marke.ziel span{color:var(--warn)}
+#pegelWert{position:absolute; left:0; top:-19px; font-size:10px; letter-spacing:.1em; color:var(--dim)}
+#pegelWert b{color:var(--wasser-hell); font-size:12px; font-variant-numeric:tabular-nums}
+
+/* Luft, nur unter Wasser */
+#luft{position:absolute; left:50%; transform:translateX(-50%);
+  bottom:calc(122px + env(safe-area-inset-bottom,0px)); width:min(58vw,260px);
+  opacity:0; transition:opacity .25s}
+#luft.an{opacity:1}
+#luftBar{height:9px; border:1px solid #ffffff33; border-radius:5px; overflow:hidden; background:#0009}
+#luftFuell{height:100%; background:linear-gradient(90deg,#9fe6ff,#5fc6e8); transition:width .1s linear}
+#luft.knapp #luftFuell{background:linear-gradient(90deg,#ff8a6a,var(--rot))}
+#luft small{display:block; text-align:center; font-size:9px; letter-spacing:.22em;
+  color:var(--dim); margin-top:4px}
+#luft.knapp small{color:var(--rot)}
+
+/* Hinweiszeile */
+#toast{position:absolute; left:50%; transform:translateX(-50%);
+  bottom:calc(178px + env(safe-area-inset-bottom,0px)); max-width:min(84vw,520px);
+  text-align:center; font-size:12px; line-height:1.5; letter-spacing:.06em;
+  background:#04141899; border:1px solid #ffffff1f; border-radius:7px; padding:7px 13px;
+  opacity:0; transition:opacity .3s}
+#toast.an{opacity:1}
+
+/* Benutzen-Aufforderung in der Bildmitte */
+#griff{position:absolute; left:50%; top:52%; transform:translate(-50%,-50%);
+  font-size:11px; letter-spacing:.16em; color:#eaf6f4; background:#04141899;
+  border:1px solid #ffffff2b; border-radius:6px; padding:6px 12px; opacity:0; transition:opacity .15s}
+#griff.an{opacity:1}
+#fadenkreuz{position:absolute; left:50%; top:50%; width:5px; height:5px; margin:-2.5px 0 0 -2.5px;
+  border-radius:50%; background:#ffffff5c}
+
+/* Gefahr: roter Rand, wenn es nah ist */
+#gefahr{position:absolute; inset:0; pointer-events:none; opacity:0; transition:opacity .2s;
+  box-shadow:inset 0 0 90px 20px #8f1c1499, inset 0 0 200px 60px #4a0b0666}
+#gefahr.an{opacity:1}
+
+/* ---------------- Steuerung ---------------- */
+#steuer{position:fixed; inset:0; z-index:9; display:none; touch-action:none}
+#steuer.an{display:block}
+#zoneMove,#zoneLook{position:absolute; top:0; bottom:0; touch-action:none}
+#zoneMove{left:0; width:46%}
+#zoneLook{right:0; width:54%}
+#stick{position:fixed; width:118px; height:118px; margin:-59px 0 0 -59px; border-radius:50%;
+  border:1px solid #ffffff2b; background:#0a232899; opacity:0; transition:opacity .12s; pointer-events:none}
+#stick.on{opacity:.85}
+#knob{position:absolute; left:50%; top:50%; width:50px; height:50px; margin:-25px 0 0 -25px;
+  border-radius:50%; background:#bfe9e480; border:1px solid #ffffff40}
+.knopf{position:fixed; border-radius:50%; border:1px solid #ffffff2e; background:#0a2328b0;
+  color:#dff0ee; font:600 10px/1.15 var(--ui); letter-spacing:.11em; text-align:center;
+  display:flex; align-items:center; justify-content:center; touch-action:none;
+  backdrop-filter:blur(3px)}
+.knopf.held{background:#2b8f88cc; border-color:#8fe4dc}
+.knopf.act{border-color:var(--warn); color:#ffd9bd}
+#bUse{right:calc(20px + env(safe-area-inset-right,0px));
+  bottom:calc(112px + env(safe-area-inset-bottom,0px)); width:78px; height:78px}
+#bRun{right:calc(108px + env(safe-area-inset-right,0px));
+  bottom:calc(38px + env(safe-area-inset-bottom,0px)); width:66px; height:66px}
+#bDive{right:calc(24px + env(safe-area-inset-right,0px));
+  bottom:calc(32px + env(safe-area-inset-bottom,0px)); width:70px; height:70px}
+#bMenu{left:calc(12px + env(safe-area-inset-left,0px));
+  top:calc(34px + env(safe-area-inset-top,0px)); width:40px; height:40px; font-size:15px}
+@media (hover:hover) and (pointer:fine){ #steuer.an{display:none} }
+
+/* ---------------- Bildschirme ---------------- */
+.screen{position:fixed; inset:0; z-index:20; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:14px; padding:26px 20px;
+  background:radial-gradient(120% 100% at 50% 40%, #0b2c33 0%, #04121600 70%), #030c0f;
+  text-align:center}
+.screen.hidden{display:none}
+.screen h1{font-size:clamp(26px,7vw,46px); letter-spacing:.1em; font-weight:700;
+  text-shadow:2px 0 0 #c8443a55, -2px 0 0 #3fb8ae55}
+.screen h1 small{display:block; font-size:11px; letter-spacing:.4em; color:var(--wasser);
+  margin-bottom:7px; text-shadow:none}
+.screen p{max-width:44ch; font-size:12.5px; line-height:1.75; color:var(--dim); letter-spacing:.03em}
+.screen p.eng{max-width:36ch}
+.big{font:600 14px/1 var(--ui); letter-spacing:.2em; padding:15px 30px; border-radius:9px;
+  border:1px solid var(--wasser); background:#0e3a3ab5; color:#c9f2ee; cursor:pointer}
+.big:hover{background:#15514fcc}
+.big:disabled{opacity:.4; cursor:default; border-color:#ffffff2b; color:var(--blass)}
+.chip{font:600 10px/1 var(--ui); letter-spacing:.16em; padding:9px 15px; border-radius:7px;
+  border:1px solid #ffffff26; background:#08222899; color:var(--dim); cursor:pointer}
+.chip.sel{border-color:var(--wasser); color:#c9f2ee; background:#0e3a3aa8}
+.row{display:flex; gap:9px; flex-wrap:wrap; justify-content:center}
+.hint{font-size:10px; letter-spacing:.16em; color:var(--blass)}
+#scBrief{cursor:pointer}
+#scBrief .zeile{display:flex; gap:10px; align-items:baseline; max-width:40ch; text-align:left}
+#scBrief .zeile b{color:var(--wasser); font-size:11px; letter-spacing:.14em; min-width:2.4em}
+#scBrief .zeile span{font-size:12px; line-height:1.7; color:var(--dim)}
+#ladebalken{width:min(70vw,300px); height:3px; background:#ffffff1a; border-radius:2px; overflow:hidden}
+#ladefuell{height:100%; width:0; background:var(--wasser); transition:width .2s}
+#endStats{font-size:11px; letter-spacing:.14em; color:var(--blass); line-height:2}
+</style>
+</head>
+<body>
+
+<div id="buehne"><canvas id="c"></canvas></div>
+<div id="band"></div>
+
+<!-- ======================= Anzeige ======================= -->
+<div id="hud">
+  <div class="tc"><span class="rec"></span><span id="tc">00:00:00</span></div>
+  <div id="auftrag"><b id="schieberZahl">0/3</b>SCHIEBER OFFEN</div>
+
+  <div id="pegel">
+    <div id="pegelWert">PEGEL <b id="pegelText">1.60</b> m</div>
+    <div id="saeule"><div id="fuell"></div></div>
+    <div class="marke ziel" id="markeLuke" style="bottom:0"><span>LUKE</span></div>
+  </div>
+
+  <div id="fadenkreuz"></div>
+  <div id="griff">BENUTZEN</div>
+
+  <div id="luft">
+    <div id="luftBar"><div id="luftFuell" style="width:100%"></div></div>
+    <small>LUFT</small>
+  </div>
+
+  <div id="toast"></div>
+  <div id="gefahr"></div>
+</div>
+
+<!-- ======================= Steuerung ======================= -->
+<div id="steuer">
+  <div id="zoneMove"></div>
+  <div id="zoneLook"></div>
+  <div id="stick"><div id="knob"></div></div>
+  <div class="knopf" id="bUse">BENUTZEN</div>
+  <div class="knopf" id="bRun">RENNEN</div>
+  <div class="knopf" id="bDive">TAUCHEN</div>
+  <div class="knopf" id="bMenu">☰</div>
+</div>
+
+<!-- ======================= Bildschirme ======================= -->
+<div class="screen" id="scTitle">
+  <h1><small>FOUND TAPE · BAND 2 · EBENE 1</small>POOLROOMS</h1>
+  <p class="eng">Band 2 von 3. Aufgenommen unter dem Hallenbad an der Rieselstraße,
+     drei Wochen nach der Schließung.</p>
+  <div id="ladebalken"><div id="ladefuell"></div></div>
+  <button class="big" id="bStart" disabled>BAND WIRD GELESEN …</button>
+  <p class="hint" id="titelHint">TASTEN WASD · MAUS · E BENUTZEN · LEERTASTE TAUCHEN</p>
+</div>
+
+<div class="screen hidden" id="scDiff">
+  <h1><small>EINSTELLUNG</small>WIE TIEF?</h1>
+  <div class="row">
+    <button class="chip" data-diff="ruhig">RUHIG</button>
+    <button class="chip sel" data-diff="normal">NORMAL</button>
+    <button class="chip" data-diff="tief">TIEF</button>
+  </div>
+  <p class="eng" id="diffText">Normal — die Luft reicht 24 Sekunden, es sucht dich in ruhigem Tempo.</p>
+  <p class="hint">BILDQUALITÄT</p>
+  <div class="row">
+    <button class="chip" data-q="low">NIEDRIG</button>
+    <button class="chip sel" data-q="mid">MITTEL</button>
+    <button class="chip" data-q="high">HOCH</button>
+  </div>
+  <button class="big" id="bPlay" style="margin-top:8px">▶ PLAY</button>
+  <button class="chip" id="bZurueck">ZURÜCK</button>
+</div>
+
+<div class="screen hidden" id="scBrief">
+  <h1><small>AUFTRAG</small>DAS WASSER IST DER WEG</h1>
+  <div class="zeile"><b>01</b><span>Der Notausstieg liegt auf dem Sims in der großen Halle — zu hoch, um hinzukommen.</span></div>
+  <div class="zeile"><b>02</b><span>Drei Schieber lassen Wasser herein. Jeder offene Schieber hebt den Pegel. Steht er hoch genug, schwimmst du zum Sims.</span></div>
+  <div class="zeile"><b>03</b><span>Sobald du schwimmst, bist du erreichbar. Wo du stehen kannst, kommt es nicht hin.</span></div>
+  <p class="hint" style="margin-top:10px">TIPPEN ZUM STARTEN</p>
+</div>
+
+<div class="screen hidden" id="scPause">
+  <h1><small>BAND ANGEHALTEN</small>PAUSE</h1>
+  <button class="big" id="bWeiter">WEITER</button>
+  <div class="row">
+    <button class="chip" id="bTon">TON: AN</button>
+    <button class="chip" id="bNeu">NEU STARTEN</button>
+    <button class="chip" id="bRaus">ZURÜCK ZUM BAND</button>
+  </div>
+</div>
+
+<div class="screen hidden" id="scEnd">
+  <h1 id="endTitle">ENDE DES BANDES</h1>
+  <p id="endText"></p>
+  <p id="endStats"></p>
+  <button class="big" id="bNochmal">NOCHMAL ABSPIELEN</button>
+  <button class="chip" id="bRaus2">ZURÜCK ZUM BAND</button>
+</div>
+
+<script type="importmap">
+{"imports":{"three":"../lib/three.module.js"}}
+</script>
+<script type="module" src="./spiel.js"></script>
+<script src="../heim.js" data-ziel="../index.html" data-ecke="ol" data-rand="8"></script>
+</body>
+</html>
