@@ -5983,6 +5983,13 @@ function resumeGame(){
   scPause.classList.add('hidden');
   S.phase = 'play';
   clock.getDelta();
+  tonWecken();
+}
+/* Android hängt den Tonzweig ab, sobald die App in den Hintergrund geht,
+   und weckt ihn nicht von selbst wieder auf. Ohne das hier kommt man
+   zurück in ein stummes Band. */
+function tonWecken(){
+  if(SND.ctx && SND.ctx.state === 'suspended') SND.ctx.resume();
 }
 function fmtTime(sec){
   const m = String(Math.floor(sec/60)).padStart(2,'0'), s = String(Math.floor(sec%60)).padStart(2,'0');
@@ -6403,7 +6410,10 @@ $('bWeiterPool').addEventListener('click', () => location.href = './poolrooms/in
 }
 $('bAgain').addEventListener('click', () => location.reload());
 $('bAgainSeed').addEventListener('click', () => { location.search = '?seed=' + (Math.random()*1e9|0); });
-document.addEventListener('visibilitychange', () => { if(document.hidden && S.phase === 'play') pauseGame(); });
+document.addEventListener('visibilitychange', () => {
+  if(document.hidden){ if(S.phase === 'play') pauseGame(); }
+  else tonWecken();
+});
 
 /* ---------- Ladeanzeige ---------- */
 {

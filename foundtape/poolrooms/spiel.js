@@ -1838,10 +1838,15 @@ function monSchritt(dt){
   MON.abstand = Math.hypot(MON.x-px, MON.z-pz);
 
   /* Hören: der Lärm der Figur reicht so weit, wie sie ihn macht */
+  const jagteSchon = MON.jagt > 0;
   if(P.laerm > MON.abstand * (1/GR.wittert)){
     MON.weissX = px; MON.weissZ = pz; MON.weissT = ZEIT.t;
     MON.jagt = Math.max(MON.jagt, 7.0);
     if(!MON.wach){ MON.wach = true; }
+    /* Der Augenblick, in dem sie den Kopf hebt, geht in die Hand. Kein
+       Ton, keine Schrift — man soll es spüren und nicht wissen, warum.
+       Nur beim Umschlagen: solange sie ohnehin jagt, bleibt es still. */
+    if(!jagteSchon && navigator.vibrate) navigator.vibrate([0, 26, 45, 60]);
   }
   MON.jagt = Math.max(0, MON.jagt - dt);
 
@@ -2130,6 +2135,7 @@ function schieberSchritt(dt){
         s.lampe.material = new T.MeshBasicMaterial({ color:0x6fe08a });
         WASSER.ziel = wasserZiel();
         flutTon();
+        if(navigator.vibrate) navigator.vibrate(30);   // das Rad rastet ein
         const n = offenZahl();
         melde(n < 3
           ? 'SCHIEBER ' + ['I','II','III'][s.nr-1] + ' OFFEN · DAS WASSER STEIGT AUF ' + WASSER.ziel.toFixed(2) + ' m'
@@ -2176,6 +2182,11 @@ function zeit(sek){
 }
 let hudAcc = 0;
 function hudSchritt(dt){
+  /* Ausdauer sitzt im Knopf: der Ring leert sich, und wenn nichts mehr
+     da ist, wird er matt. Ohne das läuft man plötzlich langsamer und
+     hält es für einen Fehler. */
+  bRun.style.setProperty('--kraft', P.kraft.toFixed(3));
+  bRun.classList.toggle('leer', P.kraft < 0.25);
   hudAcc += dt;
   if(hudAcc < 0.08) return;
   hudAcc = 0;
@@ -2346,7 +2357,16 @@ function pause(){
   S.phase = 'pause'; allesLos(); zeige(scPause);
   if(document.pointerLockElement) document.exitPointerLock();
 }
-function weiter(){ if(S.phase === 'pause'){ S.phase = 'spiel'; zeige(null); } }
+function weiter(){ if(S.phase === 'pause'){ S.phase = 'spiel'; zeige(null); tonWecken(); } }
+/* Wer die App wechselt, soll nicht tot zurückkommen: das Band hält an.
+   Android hängt dabei den Tonzweig ab und weckt ihn nicht von selbst. */
+function tonWecken(){
+  if(SND.ctx && SND.ctx.state === 'suspended') SND.ctx.resume();
+}
+document.addEventListener('visibilitychange', () => {
+  if(document.hidden){ if(S.phase === 'spiel') pause(); }
+  else tonWecken();
+});
 
 function zurueckspulen(grund){
   if(S.phase !== 'spiel') return;
@@ -2398,6 +2418,7 @@ function gewonnen(){
   LUKE.offen = true;
   piep(520, 0.3, 0.1); setTimeout(()=>piep(780,0.5,0.09), 220);
   knall(1.8, 900, 0.3);
+  if(navigator.vibrate) navigator.vibrate([0, 70, 50, 150]);
 }
 
 /* ======================= 14  Bild ======================= */

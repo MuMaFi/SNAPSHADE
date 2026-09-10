@@ -572,6 +572,10 @@ function sieSchritt(dt){
         g.z = modW(P.z + rz*neuD);
         g.abstand = neuD;
         sprungTon(clamp(1 - neuD/90, 0.15, 1));
+        /* Der Sprung passiert hinter dem Rücken — sehen kann man ihn nicht.
+           Also geht er in die Hand: je näher sie landet, desto härter. */
+        if(neuD < 45 && navigator.vibrate)
+          navigator.vibrate(Math.round(10 + (1 - neuD/45) * 48));
         /* Das Band verschluckt sich im Moment des Sprungs. */
         STAND.riss = 0.55;
         if(neuD < 18 && Math.random() < 0.35) durchschlagAusloesen();
@@ -919,6 +923,12 @@ function hudSchritt(dt){
      Richtungsangabe läuft man an ihm vorbei, ohne es zu merken.
      Der Winkel ist bildbezogen: 0 heißt geradeaus.
      Die Wiese ist eine Schleife, deshalb der kürzeste Weg über dW. */
+  /* Ausdauer sitzt im Knopf: der Ring leert sich, und wenn nichts mehr
+     da ist, wird er matt. Ohne das läuft man plötzlich langsamer und
+     hält es für einen Fehler. */
+  bRun.style.setProperty('--kraft', P.kraft.toFixed(3));
+  bRun.classList.toggle('leer', P.kraft < 0.25);
+
   const zg = $('mastZeiger');
   if(MAST.gruppe && !MAST.erreicht && STAND.phase === 'spiel'){
     const mx = dW(P.x, MAST.x), mz = dW(P.z, MAST.z);
@@ -1009,6 +1019,7 @@ function angekommen(){
   STAND.phase = 'fertig'; STAND.endT = 0;
   allesLos();
   knall(1.8, 800, 0.22);
+  if(navigator.vibrate) navigator.vibrate([0, 70, 50, 150]);
 }
 
 /* ======================= 11  Steuerung ======================= */
@@ -1232,7 +1243,16 @@ $('bStart').addEventListener('click', () => { tonStart(); zeige(scDiff); });
 $('bZurueck').addEventListener('click', () => zeige(scTitle));
 $('bPlay').addEventListener('click', () => zeige(scBrief));
 scBrief.addEventListener('click', spielStart);
-$('bWeiter').addEventListener('click', () => { if(STAND.phase==='pause'){ STAND.phase='spiel'; zeige(null); } });
+$('bWeiter').addEventListener('click', () => { if(STAND.phase==='pause'){ STAND.phase='spiel'; zeige(null); tonWecken(); } });
+/* Wer die App wechselt, soll nicht tot zurückkommen: das Band hält an.
+   Android hängt dabei den Tonzweig ab und weckt ihn nicht von selbst. */
+function tonWecken(){
+  if(SND.ctx && SND.ctx.state === 'suspended') SND.ctx.resume();
+}
+document.addEventListener('visibilitychange', () => {
+  if(document.hidden){ if(STAND.phase === 'spiel') pause(); }
+  else tonWecken();
+});
 $('bTon').addEventListener('click', () => tonSchalten(!SND.an));
 $('bNeu').addEventListener('click', () => { neuStart(); STAND.phase='spiel'; zeige(null); });
 $('bNochmal').addEventListener('click', () => { neuStart(); STAND.phase='spiel'; zeige(null); });
