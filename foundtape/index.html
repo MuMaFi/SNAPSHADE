@@ -240,6 +240,21 @@
     .diff .ds{ font-size:9.5px; line-height:1.6; }
     .brief{ line-height:1.9; }
   }
+
+/* Empfindlichkeit des Umsehens — Wunsch aus dem Spieltest: manchen ist das
+   Wischen zu träge, anderen zu fahrig. */
+.empfBlock{display:flex; flex-direction:column; align-items:center; gap:7px; margin:2px 0}
+.empfBlock label{font-size:10px; letter-spacing:.22em; opacity:.6}
+.empfBlock b{font-weight:400; color:#e8d49a}
+#empfRegler{-webkit-appearance:none; appearance:none; width:min(260px,64vw); height:22px;
+  background:transparent; cursor:pointer}
+#empfRegler::-webkit-slider-runnable-track{height:3px; background:#3a3222; border-radius:2px}
+#empfRegler::-moz-range-track{height:3px; background:#3a3222; border-radius:2px}
+#empfRegler::-webkit-slider-thumb{-webkit-appearance:none; appearance:none;
+  width:20px; height:20px; margin-top:-9px; border-radius:50%;
+  background:#0c0b08; border:1px solid #a08a3c}
+#empfRegler::-moz-range-thumb{width:20px; height:20px; border-radius:50%;
+  background:#0c0b08; border:1px solid #a08a3c}
 </style>
 </head>
 <body>
@@ -349,6 +364,10 @@
   <h1 style="font-size:14px">PAUSE</h1>
   <div class="rule"></div>
   <p id="pauseStats"></p>
+  <div class="empfBlock">
+    <label for="empfRegler">EMPFINDLICHKEIT <b id="empfWert">1.0×</b></label>
+    <input type="range" id="empfRegler" min="30" max="250" step="5" value="100">
+  </div>
   <button class="big" id="bResume">WEITER</button>
   <div class="row">
     <button class="chip" id="bMusic">MUSIK: AN</button>
