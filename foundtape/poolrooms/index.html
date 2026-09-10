@@ -116,6 +116,19 @@ canvas{display:block; width:100%; height:100%; touch-action:none}
   bottom:calc(38px + env(safe-area-inset-bottom,0px)); width:66px; height:66px}
 #bDive{right:calc(24px + env(safe-area-inset-right,0px));
   bottom:calc(32px + env(safe-area-inset-bottom,0px)); width:70px; height:70px}
+/* Der RENNEN-Knopf ist zugleich die Ausdaueranzeige: ein Ring, der sich
+   leert. Kein Balken mehr im Bild — die Auskunft steht da, wo der Daumen
+   ohnehin liegt. */
+#bRun{ --kraft:1 }
+#bRun::before{
+  content:''; position:absolute; inset:-3px; border-radius:50%; pointer-events:none;
+  background:conic-gradient(#cfe4bdd9 calc(var(--kraft) * 360deg), #ffffff14 0);
+  -webkit-mask:radial-gradient(closest-side, #0000 calc(100% - 3px), #000 calc(100% - 3px));
+          mask:radial-gradient(closest-side, #0000 calc(100% - 3px), #000 calc(100% - 3px));
+  transition:opacity .2s;
+}
+#bRun.leer::before{ background:conic-gradient(#e0895fcc calc(var(--kraft) * 360deg), #ffffff14 0) }
+#bRun.leer{ opacity:.6 }
 #bMenu{left:calc(12px + env(safe-area-inset-left,0px));
   top:calc(34px + env(safe-area-inset-top,0px)); width:40px; height:40px; font-size:15px}
 @media (hover:hover) and (pointer:fine){ #steuer.an{display:none} }

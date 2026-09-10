@@ -1,5 +1,5 @@
 /* Found Tape — Offline-Cache. Alles liegt lokal, das Spiel läuft ohne Netz. */
-const CACHE = 'foundtape-v5';
+const CACHE = 'foundtape-v6';
 const FILES = [
   './', './index.html', './game.js', './manifest.webmanifest',
   './lib/three.min.js', './lib/GLTFLoader.js',
