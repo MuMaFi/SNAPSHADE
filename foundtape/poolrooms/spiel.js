@@ -25,9 +25,9 @@ if(!QUAL[qKey]) qKey = 'mid';
 let Q = QUAL[qKey];
 
 const GRADE = {
-  ruhig:  { luft:34, jagd:1.85, wittert:0.55, name:'Ruhig' },
-  normal: { luft:24, jagd:2.25, wittert:1.00, name:'Normal' },
-  tief:   { luft:18, jagd:2.62, wittert:1.45, name:'Tief' },
+  ruhig:  { luft:34, jagd:1.20, wittert:0.55, name:'Ruhig' },
+  normal: { luft:24, jagd:1.55, wittert:1.00, name:'Normal' },
+  tief:   { luft:18, jagd:1.85, wittert:1.45, name:'Tief' },
 };
 let gKey = localStorage.getItem('pr_diff') || 'normal';
 if(!GRADE[gKey]) gKey = 'normal';
@@ -1556,22 +1556,42 @@ const navX = i => KARTE.x0 + (i+0.5)*NG;
 const navZ = j => KARTE.z0 + (j+0.5)*NG;
 let navFuer = -99;
 
+/* Sie kommt überall hin, wo Wasser steht — auch ins Knietiefe, auch durch
+   den gefluteten Tunnel, auch in den Pumpenkeller. Nur trockener Boden
+   bleibt ihr verwehrt. Der Prüfkörper liegt deshalb nicht mehr starr an
+   der Oberfläche, sondern im Wasserraum der jeweiligen Stelle: unter
+   einer niedrigen Decke drückt sie sich eben durch. */
+const MON_MINDESTTIEFE = 0.35;
 function navBau(){
   const w = WASSER.h;
-  const u = w - 0.62, o = w + 0.18;
   for(let j=0;j<NZ;j++) for(let i=0;i<NX;i++){
     const x = navX(i), z = navZ(j);
     const b = bodenBei(x,z);
     let frei = 0;
     if(b !== AUSSEN){
       const pw = pegelBei(x,z);
-      if(pw - b >= SCHWIMM_TIEFE && deckeBei(x,z) > pw + 0.25){
-        frei = 1;
-        for(const wd of WAENDE){
-          if(o <= wd.y0 || u >= wd.y1) continue;
-          const dx = x-wd.cx, dz = z-wd.cz;
-          const la = dx*wd.co + dz*wd.si, qu = -dx*wd.si + dz*wd.co;
-          if(Math.abs(la) < wd.hw+0.34 && Math.abs(qu) < wd.hd+0.34){ frei = 0; break; }
+      if(pw - b >= MON_MINDESTTIEFE){
+        /* Die ganze Wassersäule durchprobieren, nicht nur die Oberfläche:
+           vor dem Fluttunnel ist oben ein Sturz und unten das Loch. Wer
+           nur oben nachsieht, hält den Tunnel für zugemauert. */
+        const deckel = Math.min(deckeBei(x,z), pw) - 0.06;
+        const KOERPER = 0.55;
+        /* Die Sprossen von unten treffen das schmale Fenster über einer
+           Brüstung nicht — deshalb steht der oberste Platz extra in der
+           Liste, direkt unter der Oberfläche. */
+        const plaetze = [];
+        for(let u = b + 0.08; u + KOERPER <= deckel; u += 0.42) plaetze.push(u);
+        if(deckel - KOERPER > b + 0.08) plaetze.push(deckel - KOERPER);
+        for(const u of plaetze){
+          const o = u + KOERPER;
+          let offen = 1;
+          for(const wd of WAENDE){
+            if(o <= wd.y0 || u >= wd.y1) continue;
+            const dx = x-wd.cx, dz = z-wd.cz;
+            const la = dx*wd.co + dz*wd.si, qu = -dx*wd.si + dz*wd.co;
+            if(Math.abs(la) < wd.hw+0.30 && Math.abs(qu) < wd.hd+0.30){ offen = 0; break; }
+          }
+          if(offen){ frei = 1; break; }
         }
       }
     }
@@ -1671,6 +1691,11 @@ const MON = {
   }
   MON.gruppe = g; MON.koerper = koerper; MON.arme = arme; MON.beine = beine;
   MON.kopf = kopf; MON.hoehe = 1.58;
+  /* Kleiner als ein Mensch. Etwas, das zu schmal ist, um erwachsen zu
+     sein, liest sich schlechter — und schlechter lesbar ist schlimmer. */
+  MON.skal = 0.70;
+  MON.kopfHoehe = 1.97 * MON.skal;      // Scheitel über den Füßen, aufgerichtet
+  g.scale.setScalar(MON.skal);
   g.visible = false;
   scene.add(g);
 }
@@ -1842,20 +1867,30 @@ function monSchritt(dt){
      stehend steht es auf dem Grund, wenn der nah genug ist. */
   const grund = bodenBei(MON.x, MON.z);
   let y;
+  const hierW = pegelBei(MON.x, MON.z);
+  const treten = hierW - (MON.kopfHoehe - 0.18);   // Kopf knapp über Wasser
   if(MON.zustand === 'steht'){
-    /* Steht auf dem Grund, wo er trägt — sonst tritt sie Wasser, Kopf und
-       Schultern über der Oberfläche. */
-    y = (grund !== AUSSEN && WASSER.h - grund < 1.9) ? grund : WASSER.h - 1.78;
+    /* Steht auf dem Grund, wo er trägt — sonst tritt sie Wasser. */
+    y = (grund !== AUSSEN && hierW - grund < MON.kopfHoehe - 0.18) ? grund : treten;
   } else if(MON.zustand === 'jagt'){
     /* Waagerecht knapp unter der Oberfläche: nur Rücken und Hinterkopf
-       schneiden durch. */
-    y = WASSER.h - (MON.abstand < 9 ? 0.10 : 0.30);
+       schneiden durch. Im Flachen legt sie sich auf den Grund. */
+    y = hierW - (MON.abstand < 9 ? 0.08 : 0.24);
   } else if(MON.zustand === 'richtet'){
-    y = lerp(WASSER.h - 0.12, WASSER.h - 1.78, MON.lage);
+    y = lerp(hierW - 0.10, treten, MON.lage);
   } else {
-    y = WASSER.h - 0.12 + Math.sin(ZEIT.t*0.7)*0.03;
+    y = hierW - 0.10 + Math.sin(ZEIT.t*0.7)*0.03;
   }
-  MON.y = y;
+  /* In flachem Wasser und unter niedrigen Decken darf sie nicht im Boden
+     oder in der Decke stecken. */
+  if(grund !== AUSSEN){
+    const deckeHier = deckeBei(MON.x, MON.z);
+    const obenGrenze = Math.min(hierW, deckeHier) - 0.10;
+    y = clamp(y, grund, Math.max(grund, obenGrenze - MON.kopfHoehe*MON.lage*0.55));
+  }
+  /* Weich nachziehen: am Tunnelmund fällt die Decke um fünf Meter, und
+     ein Sprung würde wie ein Fehler aussehen statt wie Abtauchen. */
+  MON.y = lerp(MON.y, y, 1 - Math.exp(-dt*2.6));
   MON.gruppe.position.set(MON.x, MON.y, MON.z);
   MON.gruppe.rotation.y = MON.gier;
   MON.gruppe.visible = MON.wach;
@@ -2315,6 +2350,9 @@ function endBild(titel, text){
 function gewonnen(){
   if(S.phase !== 'spiel') return;
   S.phase = 'gewonnen'; S.endT = 0;
+  localStorage.setItem('ft_ebene2', '1');     // Band 3 ist jetzt gelesen
+  const weiter = $('bWeiterWiese');
+  if(weiter) weiter.style.display = '';
   LUKE.offen = true;
   piep(520, 0.3, 0.1); setTimeout(()=>piep(780,0.5,0.09), 220);
   knall(1.8, 900, 0.3);
@@ -2500,8 +2538,9 @@ $('bWeiter').addEventListener('click', weiter);
 $('bTon').addEventListener('click', () => tonSchalten(!SND.an));
 $('bNeu').addEventListener('click', () => { neuStart(); S.phase = 'spiel'; zeige(null); });
 $('bNochmal').addEventListener('click', () => { neuStart(); S.phase = 'spiel'; zeige(null); });
+$('bWeiterWiese').addEventListener('click', () => location.href = '../wiese/index.html');
 for(const id of ['bRaus','bRaus2'])
-  $(id).addEventListener('click', () => location.href = '../foundtape.html');
+  $(id).addEventListener('click', () => location.href = '../index.html');
 
 /* Ladeanzeige: hier wird nichts nachgeladen, aber der Bau der Netze und
    Texturen dauert einen Moment — den zeigen wir ehrlich an. */
@@ -2540,6 +2579,15 @@ window.PR = {
   pegel:(x,z)=>pegelBei(x,z),
   luke:LUKE, schwimmTiefe:SCHWIMM_TIEFE,
   ziel:()=>{ const z = zielObjekt(); return z ? (z.art==='luke'?'luke':'schieber'+z.s.nr) : null; },
+  monErreicht(vx, vz, zx, zz){
+    navBau();
+    if(!navBfs(vx, vz)) return -1;
+    const i = clamp(Math.round((zx-KARTE.x0)/NG - 0.5), 0, NX-1);
+    const j = clamp(Math.round((zz-KARTE.z0)/NG - 0.5), 0, NZ-1);
+    return navDist[nxy(i,j)];
+  },
+  monFelder(){ navBau(); let n = 0; for(const v of navFrei) n += v; return n; },
+  monTempo(){ return GR.jagd; },
   P, WASSER, MON, S, SCHIEBER, RAEUME, FLICKEN, WAENDE, IN,
 };
 bild();

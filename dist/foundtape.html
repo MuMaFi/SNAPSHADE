@@ -282,6 +282,7 @@
     <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
       <button class="chip sel" id="bEbene0" data-ebene="0">EBENE 0 · FLUR</button>
       <button class="chip" id="bEbene1" data-ebene="1">EBENE 1 · POOLROOMS</button>
+      <button class="chip" id="bEbene2" data-ebene="2">EBENE 2 · WIESE</button>
     </div>
     <div id="loadbar"><div id="loadfill"></div></div>
     <button class="big" id="bStart" disabled>BAND WIRD GELESEN …</button>
@@ -4107,9 +4108,9 @@ const $ = id => document.getElementById(id);
    window.FT_ASSETS für jeden Pfad der eingebettete Inhalt. */
 const A = u => (window.FT_ASSETS && window.FT_ASSETS[u]) || u;
 
-/* Ebene 1 (Poolrooms) liegt als eigener Ordner neben dieser Seite. In der
-   Einzeldatei-Fassung gibt es diesen Ordner nicht — dort bleibt sie zu. */
-const EBENE1_DA = !window.FT_EINZELDATEI;
+/* Die Folgeebenen liegen als eigene Ordner neben dieser Seite. In der
+   Einzeldatei-Fassung gibt es die nicht — dort bleiben sie zu. */
+const EBENEN_DA = !window.FT_EINZELDATEI;
 
 /* ====================== 2  Renderer und Material ====================== */
 
@@ -6240,10 +6241,10 @@ function winStep(dt){
     endScreen('AUSGESTIEGEN',
       'Die Tür fällt hinter dir zu.<br>' + CFG.tapes + ' Bänder, ein Foto und ein Treppenhaus ins Nichts.' +
       (S.hasPhoto ? '' : '<br>Das Foto liegt noch da unten.') +
-      (EBENE1_DA ? '<br><br>Das Treppenhaus geht nur nach unten. Unten steht Wasser.' : ''));
+      (EBENEN_DA ? '<br><br>Das Treppenhaus geht nur nach unten. Unten steht Wasser.' : ''));
     /* Wer Ebene 0 geschafft hat, kommt hier weiter — der Knopf steht nur
        nach einem Ausstieg da, nicht nach einem Tod. */
-    if(EBENE1_DA){
+    if(EBENEN_DA){
       localStorage.setItem('ft_ebene1', '1');      // Band 2 ist jetzt gelesen
       const weiter = $('bWeiterPool');
       if(weiter) weiter.style.display = '';
@@ -6340,33 +6341,43 @@ $('bWeiterPool').addEventListener('click', () => location.href = './poolrooms/in
    braucht und dieses Band hier schon acht Megabyte wiegt. Für den Spieler
    ist es ein Spiel: ein Eintrag, ein Titelbild, eine Auswahl. */
 {
-  const b0 = $('bEbene0'), b1 = $('bEbene1'), sub = $('titleSub');
-  const frei = localStorage.getItem('ft_ebene1') === '1';
-  if(!EBENE1_DA){
-    b1.style.opacity = '.35';
-    b1.title = 'In der Einzeldatei nicht enthalten.';
-  } else if(!frei){
-    b1.style.opacity = '.45';
-    b1.title = 'Erst Ebene 0 überstehen.';
-  }
+  const b0 = $('bEbene0'), sub = $('titleSub');
+  /* Jedes Band schaltet das nächste frei. Wer nur Ebene 0 gesehen hat,
+     soll gar nicht erst wissen, was danach kommt.
+     Die Ziele nennen die Datei ausdrücklich: ein Webserver ergänzt die
+     index.html von selbst, der Asset-Lader der App tut das nicht. */
+  const baender = [
+    { knopf: $('bEbene1'), schluessel: 'ft_ebene1', ziel: './poolrooms/index.html', vor: 'EBENE 0' },
+    { knopf: $('bEbene2'), schluessel: 'ft_ebene2', ziel: './wiese/index.html',     vor: 'EBENE 1' }
+  ];
   b0.addEventListener('click', () => {
-    b0.classList.add('sel'); b1.classList.remove('sel');
+    b0.classList.add('sel');
+    for(const b of baender) b.knopf.classList.remove('sel');
     sub.innerHTML = 'SUBLEVEL 0 &nbsp;·&nbsp; LOST FOOTAGE';
   });
-  b1.addEventListener('click', () => {
-    if(!EBENE1_DA){
-      sub.innerHTML = 'EBENE 1 GIBT ES NUR IN DER APP &nbsp;·&nbsp; ODER IM NETZ';
-      sndDenied();
-      return;
+  for(const b of baender){
+    if(!EBENEN_DA){
+      b.knopf.style.opacity = '.35';
+      b.knopf.title = 'In der Einzeldatei nicht enthalten.';
+    } else if(localStorage.getItem(b.schluessel) !== '1'){
+      b.knopf.style.opacity = '.45';
+      b.knopf.title = 'Erst ' + b.vor + ' überstehen.';
     }
-    if(localStorage.getItem('ft_ebene1') !== '1'){
-      sub.innerHTML = 'BAND 2 IST NOCH NICHT GELESEN &nbsp;·&nbsp; ERST EBENE 0';
-      sndDenied();
-      return;
-    }
-    initAudio();
-    location.href = './poolrooms/index.html';
-  });
+    b.knopf.addEventListener('click', () => {
+      if(!EBENEN_DA){
+        sub.innerHTML = 'DIE WEITEREN BÄNDER GIBT ES NUR IN DER APP &nbsp;·&nbsp; ODER IM NETZ';
+        sndDenied();
+        return;
+      }
+      if(localStorage.getItem(b.schluessel) !== '1'){
+        sub.innerHTML = 'DIESES BAND IST NOCH NICHT GELESEN &nbsp;·&nbsp; ERST ' + b.vor;
+        sndDenied();
+        return;
+      }
+      initAudio();
+      location.href = b.ziel;
+    });
+  }
 }
 $('bAgain').addEventListener('click', () => location.reload());
 $('bAgainSeed').addEventListener('click', () => { location.search = '?seed=' + (Math.random()*1e9|0); });

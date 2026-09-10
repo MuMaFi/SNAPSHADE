@@ -1,0 +1,9 @@
+sirene.glb
+  Titel:   "Test" (Siren Head)
+  Autor:   SIREN HEAD FANS — https://sketchfab.com/Garrys-Mod
+  Quelle:  https://sketchfab.com/3d-models/test-b1c405537f834e04b85cad1c7fbe60dd
+  Lizenz:  CC-BY-4.0 — http://creativecommons.org/licenses/by/4.0/
+
+Die Lizenz erlaubt Nutzung und Weitergabe, auch verändert und
+kommerziell, solange der Urheber genannt wird. Die Nennung steht
+im Spiel unter "Herkunft" auf dem Titelbildschirm.

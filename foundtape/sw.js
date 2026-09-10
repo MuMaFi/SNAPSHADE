@@ -1,13 +1,16 @@
 /* Found Tape — Offline-Cache. Alles liegt lokal, das Spiel läuft ohne Netz. */
-const CACHE = 'foundtape-v4';
+const CACHE = 'foundtape-v5';
 const FILES = [
   './', './index.html', './game.js', './manifest.webmanifest',
   './lib/three.min.js', './lib/GLTFLoader.js',
   './assets/wall.jpg', './assets/wall2.jpg', './assets/floor.jpg',
   './assets/photo.jpg', './assets/monster.glb',
   './assets/music/tracks.json', './assets/music/handprint.mp3',
-  './poolrooms/', './poolrooms/index.html', './poolrooms/spiel.js', './heim.js',
-  './lib/three.module.js', './lib/three.core.js',
+  './poolrooms/index.html', './poolrooms/spiel.js',
+  './wiese/index.html', './wiese/spiel.js', './wiese/modelle/sirene.glb',
+  './heim.js', './lib/three.module.js', './lib/three.core.js',
+  './lib/jsm/loaders/GLTFLoader.js', './lib/jsm/utils/SkeletonUtils.js',
+  './lib/jsm/utils/BufferGeometryUtils.js',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png'
 ];
 
