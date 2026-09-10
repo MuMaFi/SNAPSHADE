@@ -1,11 +1,13 @@
 /* Found Tape — Offline-Cache. Alles liegt lokal, das Spiel läuft ohne Netz. */
-const CACHE = 'foundtape-v3';
+const CACHE = 'foundtape-v4';
 const FILES = [
   './', './index.html', './game.js', './manifest.webmanifest',
   './lib/three.min.js', './lib/GLTFLoader.js',
   './assets/wall.jpg', './assets/wall2.jpg', './assets/floor.jpg',
   './assets/photo.jpg', './assets/monster.glb',
   './assets/music/tracks.json', './assets/music/handprint.mp3',
+  './poolrooms/', './poolrooms/index.html', './poolrooms/spiel.js', './heim.js',
+  './lib/three.module.js', './lib/three.core.js',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png'
 ];
 

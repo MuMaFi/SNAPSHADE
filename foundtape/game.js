@@ -39,6 +39,7 @@ const CFG = {
   sprint:     4.65,
   staminaMax: 6.0,
   staminaRegen: 0.95,
+  staminaFrei: 0.33,  // so voll muss der Balken sein, um wieder rennen zu dürfen
 
   tapes:      6,
   batteries:  5,
@@ -102,6 +103,10 @@ const $ = id => document.getElementById(id);
 /* Dateipfade laufen über diese Stelle. In der Einzeldatei-Fassung liegt in
    window.FT_ASSETS für jeden Pfad der eingebettete Inhalt. */
 const A = u => (window.FT_ASSETS && window.FT_ASSETS[u]) || u;
+
+/* Ebene 1 (Poolrooms) liegt als eigener Ordner neben dieser Seite. In der
+   Einzeldatei-Fassung gibt es diesen Ordner nicht — dort bleibt sie zu. */
+const EBENE1_DA = !window.FT_EINZELDATEI;
 
 /* ====================== 2  Renderer und Material ====================== */
 
@@ -1636,7 +1641,11 @@ zMove.addEventListener('pointermove', e => {
   elKnob.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
   IN.mx = dx/STICK_R;
   IN.mz = dy/STICK_R;
-  if(l > STICK_R*1.55) IN.run = true;          // weit durchdrücken = rennen
+  /* Rennen hängt allein am Knopf. Vorher löste auch ein weit
+     durchgedrückter Knüppel aus — beim Ausweichen in eine Ecke rannte man
+     dann ungewollt los, und das kostet in diesem Spiel Puste, macht Lärm
+     und zieht die Gestalt an. Wer rennen will, sagt es ausdrücklich. */
+  IN.run = bRun.classList.contains('held');
   e.preventDefault();
 });
 function endMove(e){
@@ -1671,6 +1680,21 @@ function holdBtn(el, on, off){
     el.addEventListener(t, () => { if(el.classList.contains('held')){ el.classList.remove('held'); off(); } }));
 }
 holdBtn(bRun, ()=>IN.run=true, ()=>IN.run=false);
+
+/* Wer mit gehaltener Umschalttaste das Fenster wechselt, bekam sie nie wieder
+   los: keyup geht an das andere Fenster, KEY.ShiftLeft blieb wahr, und nach
+   der Rückkehr rannte die Figur von allein, bis die Luft weg war. Beim
+   Fokusverlust und in der Pause geht deshalb alles auf null. */
+function steuerungLoslassen(){
+  for(const k in KEY) KEY[k] = false;
+  IN.run = false; IN.use = false;
+  IN.mx = IN.mz = 0; IN.dyaw = IN.dpitch = 0;
+  bRun.classList.remove('held');
+  moveId = null; lookId = null;
+  elKnob.style.transform = 'translate(0,0)';
+  elStick.classList.remove('on');
+}
+addEventListener('blur', steuerungLoslassen);
 
 /* Ein Knopf muss auch dann gehen, wenn schon ein Finger auf dem Stick liegt.
    Android schickt bei einer zweiten Berührung kein click mehr - deshalb hängt
@@ -1728,7 +1752,7 @@ const S = {
   yaw: 0, pitch: 0, yawT: 0, pitchT: 0, swing: 0, tilt: 0,
   pos: new THREE.Vector3(),
   bob: 0, lastStep: 0, speed: 0, gait: 0, eyeY: CFG.eye, pusteLos: false,
-  stamina: CFG.staminaMax,
+  stamina: CFG.staminaMax, erschoepft: false,
   battery: 100,
   tapes: 0,
   hasPhoto: false,
@@ -1766,7 +1790,7 @@ function applyDifficulty(key){
   CFG.drainNv = d.drainNv;
   CFG.dirMin = d.dirMin;     CFG.dirRnd = d.dirRnd;
   CFG.verlier = d.verlier;   CFG.steigerung = d.steigerung;
-  S.stamina = d.stamina;
+  S.stamina = d.stamina; S.erschoepft = false;
 
   let t = 0, b = 0;
   for(const it of items){
@@ -1922,6 +1946,7 @@ function startGame(){
 function pauseGame(){
   if(S.phase !== 'play') return;
   S.phase = 'pause';
+  steuerungLoslassen();
   if(document.pointerLockElement) document.exitPointerLock();
   $('pauseStats').innerHTML =
     'BÄNDER ' + S.tapes + '/' + CFG.tapes + '<br>AKKU ' + Math.round(S.battery) + '%' +
@@ -2036,7 +2061,17 @@ function step(dt){
      Schritt — der Knopf wirkte kaputt. Jetzt genügt eine Bewegungsabsicht,
      und der Knopf schiebt den Ausschlag selbst auf Anschlag. */
   const willRennen = (IN.run || KEY.ShiftLeft || KEY.ShiftRight) && mag > 0.12;
-  const wantRun = willRennen && S.stamina > 0.05;
+
+  /* Ausdauer mit Sperre. Vorher hieß die Bedingung `S.stamina > 0.05`: leer
+     gelaufen, wurde sie schon nach drei Bildern wieder wahr, und gedrückt
+     gehaltenes Rennen flatterte danach dauerhaft zwischen Gehen und Sprint —
+     Tempo pendelte um 3,5, der Ausdauerbalken strobte, und auf richtiges
+     Tempo kam man nie wieder. Wer leer ist, geht jetzt, bis der Balken zu
+     einem Drittel voll ist. */
+  if(S.stamina <= 0) S.erschoepft = true;
+  else if(S.stamina >= CFG.staminaMax * CFG.staminaFrei) S.erschoepft = false;
+
+  const wantRun = willRennen && !S.erschoepft;
   if(wantRun && mag < 1){ fwd /= mag; strafe /= mag; mag = 1; }
   S.pusteLos = willRennen && !wantRun;        // gedrückt, aber die Luft ist weg
 
@@ -2048,7 +2083,10 @@ function step(dt){
   const moved = S.speed > 0.03 ? movePlayer(dt, fwd, strafe, S.speed) : 0;
   const real  = dt > 0 ? moved/dt : 0;            // was tatsächlich zurückgelegt wurde
 
-  if(wantRun && moved > 0.001) S.stamina = Math.max(0, S.stamina - dt);
+  /* Der Verbrauch hing an `moved`: wer im Sprint frontal gegen eine Wand
+     lief, kam auf 0 Bewegung — und füllte den Balken bei vollem Sprinttempo
+     wieder auf. Es zählt jetzt die Absicht, nicht der Erfolg. */
+  if(wantRun) S.stamina = Math.max(0, S.stamina - dt);
   else S.stamina = Math.min(CFG.staminaMax, S.stamina + dt*CFG.staminaRegen);
 
   // Schrittakt hängt am echten Tempo, nicht an einer Stufe — und wird gedämpft,
@@ -2147,7 +2185,7 @@ function step(dt){
   HUDS.tapes = S.tapes; HUDS.battery = S.battery; HUDS.time = S.t;
   HUDS.stamina = S.stamina/CFG.staminaMax; HUDS.signal = signal; HUDS.nv = IN.nv;
   HUDS.ausgepustet = S.pusteLos;
-  bRun.classList.toggle('leer', S.stamina < 0.35);
+  bRun.classList.toggle('leer', S.erschoepft || S.stamina < CFG.staminaMax*0.25);
   // Der Pfeil erscheint mit dem Foto — und spätestens, wenn alle Bänder da sind
   HUDS.exit = (S.hasPhoto || S.exitOpen)
     ? (Math.atan2(EXIT.pos.x - S.pos.x, -(EXIT.pos.z - S.pos.z)) + S.yaw) : null;
@@ -2198,7 +2236,15 @@ function winStep(dt){
   if(S.endT > 2.0 && scEnd.classList.contains('hidden')){
     endScreen('AUSGESTIEGEN',
       'Die Tür fällt hinter dir zu.<br>' + CFG.tapes + ' Bänder, ein Foto und ein Treppenhaus ins Nichts.' +
-      (S.hasPhoto ? '' : '<br>Das Foto liegt noch da unten.'));
+      (S.hasPhoto ? '' : '<br>Das Foto liegt noch da unten.') +
+      (EBENE1_DA ? '<br><br>Das Treppenhaus geht nur nach unten. Unten steht Wasser.' : ''));
+    /* Wer Ebene 0 geschafft hat, kommt hier weiter — der Knopf steht nur
+       nach einem Ausstieg da, nicht nach einem Tod. */
+    if(EBENE1_DA){
+      localStorage.setItem('ft_ebene1', '1');      // Band 2 ist jetzt gelesen
+      const weiter = $('bWeiterPool');
+      if(weiter) weiter.style.display = '';
+    }
   }
 }
 
@@ -2284,6 +2330,41 @@ $('bResume').addEventListener('click', resumeGame);
 }
 $('bQuit').addEventListener('click', () => location.reload());
 $('bNewSeed').addEventListener('click', () => { location.search = '?seed=' + (Math.random()*1e9|0); });
+$('bWeiterPool').addEventListener('click', () => location.href = './poolrooms/');
+
+/* ---------- Bandwahl: dieselbe Kassette, zwei Ebenen ----------
+   Ebene 1 liegt in einer eigenen Datei, weil sie eine neuere three-Fassung
+   braucht und dieses Band hier schon acht Megabyte wiegt. Für den Spieler
+   ist es ein Spiel: ein Eintrag, ein Titelbild, eine Auswahl. */
+{
+  const b0 = $('bEbene0'), b1 = $('bEbene1'), sub = $('titleSub');
+  const frei = localStorage.getItem('ft_ebene1') === '1';
+  if(!EBENE1_DA){
+    b1.style.opacity = '.35';
+    b1.title = 'In der Einzeldatei nicht enthalten.';
+  } else if(!frei){
+    b1.style.opacity = '.45';
+    b1.title = 'Erst Ebene 0 überstehen.';
+  }
+  b0.addEventListener('click', () => {
+    b0.classList.add('sel'); b1.classList.remove('sel');
+    sub.innerHTML = 'SUBLEVEL 0 &nbsp;·&nbsp; LOST FOOTAGE';
+  });
+  b1.addEventListener('click', () => {
+    if(!EBENE1_DA){
+      sub.innerHTML = 'EBENE 1 GIBT ES NUR IN DER APP &nbsp;·&nbsp; ODER IM NETZ';
+      sndDenied();
+      return;
+    }
+    if(localStorage.getItem('ft_ebene1') !== '1'){
+      sub.innerHTML = 'BAND 2 IST NOCH NICHT GELESEN &nbsp;·&nbsp; ERST EBENE 0';
+      sndDenied();
+      return;
+    }
+    initAudio();
+    location.href = './poolrooms/';
+  });
+}
 $('bAgain').addEventListener('click', () => location.reload());
 $('bAgainSeed').addEventListener('click', () => { location.search = '?seed=' + (Math.random()*1e9|0); });
 document.addEventListener('visibilitychange', () => { if(document.hidden && S.phase === 'play') pauseGame(); });

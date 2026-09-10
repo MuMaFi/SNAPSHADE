@@ -8,6 +8,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>FOUND TAPE — SUBLEVEL 0</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%230b0b0e'/%3E%3Crect x='2' y='5' width='12' height='7' fill='%231d1f26'/%3E%3Ccircle cx='6' cy='8.5' r='1.6' fill='%23d8d2c4'/%3E%3Ccircle cx='10' cy='8.5' r='1.6' fill='%23d8d2c4'/%3E%3C/svg%3E">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -278,9 +279,14 @@
     <div class="sweep"></div>
   </div>
   <div class="titleRule"></div>
-  <p class="titleSub">SUBLEVEL 0 &nbsp;·&nbsp; LOST FOOTAGE</p>
+  <p class="titleSub" id="titleSub">SUBLEVEL 0 &nbsp;·&nbsp; LOST FOOTAGE</p>
 
-  <div class="lateIn" style="display:flex;flex-direction:column;align-items:center;gap:12px;margin-top:24px">
+  <div class="lateIn" style="display:flex;flex-direction:column;align-items:center;gap:12px;margin-top:22px">
+    <p style="font-size:9px;letter-spacing:.3em;color:#6d6449;margin:0">BAND WÄHLEN</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
+      <button class="chip sel" id="bEbene0" data-ebene="0">EBENE 0 · FLUR</button>
+      <button class="chip" id="bEbene1" data-ebene="1">EBENE 1 · POOLROOMS</button>
+    </div>
     <div id="loadbar"><div id="loadfill"></div></div>
     <button class="big" id="bStart" disabled>BAND WIRD GELESEN …</button>
   </div>
@@ -356,6 +362,7 @@
   <div class="rule"></div>
   <p id="endText"></p>
   <p id="endStats"></p>
+  <button class="big" id="bWeiterPool" style="display:none">▶ BAND 2 · EBENE 1: POOLROOMS</button>
   <button class="big" id="bAgain">NOCHMAL ABSPIELEN</button>
   <button class="chip" id="bAgainSeed">NEUES BAND</button>
 </div>
