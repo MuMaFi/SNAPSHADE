@@ -1958,6 +1958,29 @@ function monSchritt(dt){
 
 /* ======================= 9  Ton ======================= */
 const SND = { an:true, ctx:null };
+/* Die Impulsantwort ist gerechnet, keine Datei: Rauschen, das über gut
+   zwei Sekunden abklingt, davor vier harte frühe Rückwürfe von den
+   gegenüberliegenden Kacheln. Beide Kanäle bekommen eigenes Rauschen,
+   sonst sitzt der Hall als Punkt in der Mitte statt im Raum. */
+function hallRaum(ac, sek){
+  const n = Math.max(1, Math.floor(ac.sampleRate * sek));
+  const ir = ac.createBuffer(2, n, ac.sampleRate);
+  for(let k=0; k<2; k++){
+    const d = ir.getChannelData(k);
+    for(let i=0; i<n; i++){
+      const t = i / ac.sampleRate;
+      /* Abklingen, und ein Anlauf: der Raum antwortet nicht im selben
+         Augenblick, in dem der Ton entsteht. */
+      const huelle = Math.pow(1 - i/n, 2.4) * (1 - Math.exp(-t*34));
+      d[i] = (Math.random()*2 - 1) * huelle;
+    }
+    for(const [ms, laut] of [[19,0.5],[31,0.38],[47,0.27],[73,0.19]]){
+      const i = Math.floor(ac.sampleRate * ms/1000) + k*11;
+      if(i < n) d[i] += laut * (Math.random() < 0.5 ? -1 : 1);
+    }
+  }
+  return ir;
+}
 function tonStart(){
   if(SND.ctx) return;
   const AC = window.AudioContext || window.webkitAudioContext;
@@ -1966,7 +1989,30 @@ function tonStart(){
   SND.master = ac.createGain(); SND.master.gain.value = SND.an ? 0.9 : 0;
   SND.dumpf = ac.createBiquadFilter();          // unter Wasser klingt alles wie durch Watte
   SND.dumpf.type = 'lowpass'; SND.dumpf.frequency.value = 20000; SND.dumpf.Q.value = 0.4;
-  SND.master.connect(SND.dumpf); SND.dumpf.connect(ac.destination);
+  /* Ein Begrenzer am Ende: der Hall legt Energie obendrauf, und wenn
+     Schritt, Platschen und Rad zusammenfallen, würde es sonst zerren.
+     Er greift nur in die Spitzen, am Grundklang ändert er nichts. */
+  SND.grenze = ac.createDynamicsCompressor();
+  SND.grenze.threshold.value = -8; SND.grenze.knee.value = 6;
+  SND.grenze.ratio.value = 4; SND.grenze.attack.value = 0.004; SND.grenze.release.value = 0.16;
+  SND.master.connect(SND.grenze); SND.grenze.connect(SND.dumpf); SND.dumpf.connect(ac.destination);
+
+  /* Eine ausgeräumte Schwimmhalle ist vor allem eins: Hall. Ohne ihn
+     klingt jeder Schritt, als stünde man in einem Wohnzimmer statt in
+     einem Bad, aus dem alles herausgeholt wurde.
+     Nur die Einzelgeräusche gehen hinein — Schritte, Platschen, das Rad,
+     der Atem. Die Dauertöne (Brummen, Schwappen, Flut) bleiben trocken,
+     sonst wäscht der Hall den ganzen Grundklang zu Brei.
+     Alles läuft am Ende über den Hauptregler: TON: AUS macht auch den
+     Hall still, und unter Wasser dämpft der Filter ihn mit weg. */
+  SND.raum = ac.createGain(); SND.raum.gain.value = 1;
+  SND.raum.connect(SND.master);
+  try {
+    SND.hall = ac.createConvolver();
+    SND.hall.buffer = hallRaum(ac, 2.2);
+    SND.hallG = ac.createGain(); SND.hallG.gain.value = 1.2;
+    SND.raum.connect(SND.hall); SND.hall.connect(SND.hallG); SND.hallG.connect(SND.master);
+  } catch(e){ /* ohne Hall klingt es dünner, aber es klingt */ }
 
   const len = ac.sampleRate * 2;
   const buf = ac.createBuffer(1, len, ac.sampleRate);
@@ -2000,14 +2046,36 @@ function tonStart(){
   SND.flut = ac.createGain(); SND.flut.gain.value = 0;
   r.connect(rf); rf.connect(SND.flut); SND.flut.connect(SND.master); r.start();
 }
-function knall(dauer, cut, vol, typ){
+/* ---------- Richtungshören ----------
+   Sie ist im Wasser und meistens nicht zu sehen. Wo sie ist, sagt in
+   diesem Band nur der Atem — also muss er aus ihrer Richtung kommen.
+   Gerechnet wird im Kamerabild: der Hörer bleibt sitzen, der Ton wandert
+   um ihn herum. Die Lautstärke regeln weiter die Aufrufer, hier geht es
+   allein um die Richtung; deshalb liegt alles auf demselben Radius. */
+function ausRichtung(dx, dz){
+  const ac = SND.ctx; if(!ac) return null;
+  let p;
+  try { p = ac.createPanner(); } catch(e){ return null; }
+  p.panningModel = 'HRTF'; p.distanceModel = 'inverse';
+  p.refDistance = 2; p.rolloffFactor = 0; p.maxDistance = 40;
+  const co = Math.cos(P.gier), si = Math.sin(P.gier);
+  const rechts = dx*co - dz*si;
+  const vorn   = -dx*si - dz*co;
+  const l = Math.hypot(rechts, vorn) || 1;
+  const x = rechts/l*2, y = 0, z = -vorn/l*2;
+  if(p.positionX){ p.positionX.value = x; p.positionY.value = y; p.positionZ.value = z; }
+  else p.setPosition(x, y, z);
+  p.connect(SND.raum || SND.master);
+  return p;
+}
+function knall(dauer, cut, vol, typ, ziel){
   const ac = SND.ctx; if(!ac || !SND.an) return;
   const s = ac.createBufferSource(); s.buffer = SND.rausch;
   s.playbackRate.value = 0.7 + Math.random()*0.6;
   const f = ac.createBiquadFilter(); f.type = typ || 'lowpass'; f.frequency.value = cut;
   const g = ac.createGain(); g.gain.value = vol;
   g.gain.setTargetAtTime(0.0001, ac.currentTime + dauer*0.25, dauer*0.35);
-  s.connect(f); f.connect(g); g.connect(SND.master);
+  s.connect(f); f.connect(g); g.connect(ziel || SND.raum || SND.master);
   s.start(); s.stop(ac.currentTime + dauer + 0.1);
 }
 function piep(hz, dauer, vol, typ){
@@ -2016,7 +2084,7 @@ function piep(hz, dauer, vol, typ){
   const g = ac.createGain(); g.gain.value = 0;
   g.gain.setTargetAtTime(vol, ac.currentTime, 0.008);
   g.gain.setTargetAtTime(0, ac.currentTime + dauer*0.5, dauer*0.4);
-  o.connect(g); g.connect(SND.master);
+  o.connect(g); g.connect((SND.raum || SND.master));
   o.start(); o.stop(ac.currentTime + dauer + 0.2);
 }
 const schrittTon = nass => nass > 0.05 ? knall(0.22, 900+Math.random()*400, 0.16+nass*0.16)
@@ -2045,13 +2113,14 @@ function auftauchTon(){
   const g = ac.createGain(); g.gain.value = 0;
   g.gain.setTargetAtTime(0.11, ac.currentTime+0.05, 0.09);
   g.gain.setTargetAtTime(0, ac.currentTime+0.45, 0.2);
-  o.connect(f); f.connect(g); g.connect(SND.master);
+  o.connect(f); f.connect(g); g.connect((SND.raum || SND.master));
   o.start(); o.stop(ac.currentTime+1.1);
 }
 function atemTon(nah){
   const ac = SND.ctx; if(!ac || !SND.an) return;
-  knall(0.42, 700 + nah*500, 0.05 + nah*0.10, 'bandpass');
-  setTimeout(() => knall(0.5, 420, 0.04 + nah*0.08, 'bandpass'), 420);
+  const wo = () => ausRichtung(MON.x - P.x, MON.z - P.z);
+  knall(0.42, 700 + nah*500, 0.05 + nah*0.10, 'bandpass', wo());
+  setTimeout(() => knall(0.5, 420, 0.04 + nah*0.08, 'bandpass', wo()), 420);
 }
 function schreckTon(){
   const ac = SND.ctx; if(!ac || !SND.an) return;
@@ -2062,7 +2131,7 @@ function schreckTon(){
   const g = ac.createGain(); g.gain.value = 0;
   g.gain.setTargetAtTime(0.34, ac.currentTime, 0.005);
   g.gain.setTargetAtTime(0, ac.currentTime+0.5, 0.25);
-  o.connect(g); g.connect(SND.master); o.start(); o.stop(ac.currentTime+1.6);
+  o.connect(g); g.connect((SND.raum || SND.master)); o.start(); o.stop(ac.currentTime+1.6);
 }
 let herzT = 0;
 function herz(dt){
@@ -2652,7 +2721,7 @@ window.PR = {
   monFelder(){ navBau(); let n = 0; for(const v of navFrei) n += v; return n; },
   monTempo(){ return GR.jagd; },
   P, WASSER, MON, S, SCHIEBER, RAEUME, FLICKEN, WAENDE, SPERREN, IN,
-  welt, T,
+  welt, T, SND,
 };
 bild();
 
