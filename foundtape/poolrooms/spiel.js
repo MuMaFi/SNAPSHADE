@@ -1989,13 +1989,7 @@ function tonStart(){
   SND.master = ac.createGain(); SND.master.gain.value = SND.an ? 0.9 : 0;
   SND.dumpf = ac.createBiquadFilter();          // unter Wasser klingt alles wie durch Watte
   SND.dumpf.type = 'lowpass'; SND.dumpf.frequency.value = 20000; SND.dumpf.Q.value = 0.4;
-  /* Ein Begrenzer am Ende: der Hall legt Energie obendrauf, und wenn
-     Schritt, Platschen und Rad zusammenfallen, würde es sonst zerren.
-     Er greift nur in die Spitzen, am Grundklang ändert er nichts. */
-  SND.grenze = ac.createDynamicsCompressor();
-  SND.grenze.threshold.value = -8; SND.grenze.knee.value = 6;
-  SND.grenze.ratio.value = 4; SND.grenze.attack.value = 0.004; SND.grenze.release.value = 0.16;
-  SND.master.connect(SND.grenze); SND.grenze.connect(SND.dumpf); SND.dumpf.connect(ac.destination);
+  SND.master.connect(SND.dumpf); SND.dumpf.connect(ac.destination);
 
   /* Eine ausgeräumte Schwimmhalle ist vor allem eins: Hall. Ohne ihn
      klingt jeder Schritt, als stünde man in einem Wohnzimmer statt in
@@ -2010,7 +2004,12 @@ function tonStart(){
   try {
     SND.hall = ac.createConvolver();
     SND.hall.buffer = hallRaum(ac, 2.2);
-    SND.hallG = ac.createGain(); SND.hallG.gain.value = 1.2;
+    /* Die Stärke ist gemessen, nicht geraten: der Grundklang der Halle
+       liegt bei etwa -30 dB, ein Schritt bei -29. Bei 3,0 steht die Fahne
+       200 ms nach dem Schritt bei -35 dB — hörbar unter dem Schritt,
+       knapp unter dem Grundklang, also Raum statt Kathedrale. Zu nass
+       oder zu trocken? Diese eine Zahl regelt es. */
+    SND.hallG = ac.createGain(); SND.hallG.gain.value = 3.0;
     SND.raum.connect(SND.hall); SND.hall.connect(SND.hallG); SND.hallG.connect(SND.master);
   } catch(e){ /* ohne Hall klingt es dünner, aber es klingt */ }
 
