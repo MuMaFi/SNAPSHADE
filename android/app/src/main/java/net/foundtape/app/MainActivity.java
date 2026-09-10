@@ -54,7 +54,17 @@ public class MainActivity extends Activity {
     web.setWebViewClient(new WebViewClient() {
       @Override
       public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-        return loader.shouldInterceptRequest(request.getUrl());
+        WebResourceResponse res = loader.shouldInterceptRequest(request.getUrl());
+        /* Ebene 1 lädt über ES-Module. Die verlangen einen JavaScript-Medientyp;
+           was Android aus der Dateiendung errät, ist je nach Fassung "text/plain"
+           - dann verweigert die WebView das Modul. Hier wird er festgelegt. */
+        if (res != null) {
+          String pfad = request.getUrl().getPath();
+          if (pfad != null && (pfad.endsWith(".js") || pfad.endsWith(".mjs"))) {
+            res = new WebResourceResponse("text/javascript", "utf-8", res.getData());
+          }
+        }
+        return res;
       }
     });
 
