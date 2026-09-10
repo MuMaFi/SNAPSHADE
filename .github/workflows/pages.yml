@@ -45,8 +45,8 @@ jobs:
           # nicht: in ihr steckt nur Ebene 0, die beiden anderen Bänder
           # liegen als eigene Ordner daneben.
           cp -r foundtape/. _site/
-          # Die Einzeldatei zum Weitergeben, falls gebaut
-          [ -f dist/foundtape.html ] && cp dist/foundtape.html _site/foundtape-einzeldatei.html || true
+          # Die Einzeldatei zum Weitergeben: alle drei Bänder in einer HTML
+          [ -f dist/foundtape-komplett.html ] && cp dist/foundtape-komplett.html _site/foundtape-einzeldatei.html || true
           ls -R _site | head -40
 
       - name: Als Pages-Artefakt hochladen
